@@ -83,7 +83,6 @@ public class BoardGenerator : MonoBehaviour
 
             tile.coord = coord;
             tile.resource = res;
-
             if (res == ResourceType.Desert)
             {
                 tile.number = 0;
@@ -94,6 +93,7 @@ public class BoardGenerator : MonoBehaviour
                 tile.number = finalNumbers[numIndex++];
                 tile.hasRobber = false;
             }
+
 
             tile.RefreshVisual();
 

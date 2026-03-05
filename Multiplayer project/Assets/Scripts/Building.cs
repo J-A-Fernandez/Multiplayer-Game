@@ -1,7 +1,7 @@
 using UnityEngine;
 
 [System.Serializable]
-public class Building : MonoBehaviour
+public class Building
 {
     public int ownerId;
     public BuildingType type;

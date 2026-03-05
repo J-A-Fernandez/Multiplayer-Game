@@ -1,7 +1,7 @@
 using UnityEngine;
 
 [System.Serializable]
-public class Playerstate : MonoBehaviour
+public class Playerstate
 {
     public int playerId;
     public Color playerColor = Color.white;

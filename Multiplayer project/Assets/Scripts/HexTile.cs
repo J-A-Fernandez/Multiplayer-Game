@@ -1,5 +1,5 @@
 using UnityEngine;
-using TMPro;
+//using TMPro;
 
 public class HexTile : MonoBehaviour
 {
@@ -13,12 +13,12 @@ public class HexTile : MonoBehaviour
     [Header("Visuals (assign in prefab)")]
     [SerializeField] private SpriteRenderer fillRenderer;
 
-    public void Awake()
+    private void Awake()
     {
-        if(fillRenderer == null)
+        if (fillRenderer == null)
         {
             var fill = transform.Find("Fill");
-            if(fill != null) fillRenderer = fill.GetComponent<SpriteRenderer>();
+            if (fill != null) fillRenderer = fill.GetComponent<SpriteRenderer>();
         }
     }
     public bool Production(int dice) =>
@@ -28,12 +28,11 @@ public class HexTile : MonoBehaviour
     {
         if (fillRenderer != null)
             fillRenderer.color = ResourceColor(resource);
-
+        Debug.Log($"{coord} resource={resource} fillNull={(fillRenderer == null)}");
     }
 
     private Color ResourceColor(ResourceType r)
     {
-        // Simple placeholder palette (change anytime)
         return r switch
         {
             ResourceType.Brick => new Color(0.75f, 0.25f, 0.20f),

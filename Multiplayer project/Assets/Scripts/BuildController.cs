@@ -30,10 +30,23 @@ public class BuildController : MonoBehaviour
 
     private void Update()
     {
-        // Quick test hotkeys
-        if (Input.GetKeyDown(KeyCode.Escape)) mode = BuildMode.None;
-        if (Input.GetKeyDown(KeyCode.S)) mode = BuildMode.Settlement;
-        if (Input.GetKeyDown(KeyCode.R)) mode = BuildMode.Road;
+        if (Input.GetKeyDown(KeyCode.Escape))
+        {
+            mode = BuildMode.None;
+            Debug.Log("MODE=None");
+        }
+
+        if (Input.GetKeyDown(KeyCode.S))
+        {
+            mode = BuildMode.Settlement;
+            Debug.Log("S -> MODE=Settlement");
+        }
+
+        if (Input.GetKeyDown(KeyCode.R))
+        {
+            mode = BuildMode.Road;
+            Debug.Log("R -> MODE=Road");
+        }
 
         if (Input.GetKeyDown(KeyCode.Tab))
             NextPlayer();

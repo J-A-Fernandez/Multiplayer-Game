@@ -12,7 +12,8 @@ GameObject:
   - component: {fileID: 2383415980392381146}
   - component: {fileID: 5965472567113252415}
   - component: {fileID: 4421641089767940882}
-  m_Layer: 0
+  - component: {fileID: 579905809687088535}
+  m_Layer: 1
   m_Name: Intersection
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -28,7 +29,7 @@ Transform:
   m_GameObject: {fileID: 2032494065329853713}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -13.33, y: -0.2, z: 0}
+  m_LocalPosition: {x: 100000, y: 9.6043, z: 0}
   m_LocalScale: {x: 0.15, y: 0.15, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -142,4 +143,18 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Intersection
   id: 0
-  building: {fileID: 0}
+  building:
+    ownerId: 0
+    type: 0
+--- !u!114 &579905809687088535
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2032494065329853713}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9f993b522623aad44af04d6bee3d3d20, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::InsertionClick
