@@ -2,11 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using UnityEngine.Tilemaps;
 
 public class BoardGenerator : MonoBehaviour
 {
     [Header("Layout")]
-    public float hexSize = 1.0f;
+    public float hexSize = .5f;
+    public int boardRadius = 2;
 
     [Header("Prefabs")]
     public HexTile hexPrefab;
@@ -24,67 +26,61 @@ public class BoardGenerator : MonoBehaviour
 
     private Dictionary<AxialCoord, HexTile> tileByCoord = new();
 
+    [ContextMenu("Generate Board")]
     public void Generate()
     {
-        if (hexPrefab == null) Debug.LogError("hexPrefab is NULL", this);
-        if (nodePrefab == null) Debug.LogError("nodePrefab is NULL", this);
-        if (edgePrefab == null) Debug.LogError("edgePrefab is NULL", this);
+        // Prefab checks
+        if (hexPrefab == null || nodePrefab == null || edgePrefab == null)
+        {
+            Debug.LogError($"Missing prefab refs! hex={hexPrefab} node={nodePrefab} edge={edgePrefab}", this);
+            return;
+        }
+
         ClearOld();
 
-        var rng = useRandomSeed ? new System.Random(Environment.TickCount) : new System.Random(randomSeed);
+        var rng = useRandomSeed
+            ? new System.Random(Environment.TickCount)
+            : new System.Random(randomSeed);
 
-        // 1) Create standard 19 hex coords: all axial coords within radius 2
-        var coords = GenerateRadiusCoords(radius: 2);
+        // 1) Coords for any radius
+        var coords = GenerateRadiusCoords(radius: boardRadius);
+        int tileCount = coords.Count;
 
-        // 2) Prepare resource bag: (base-style distribution)
-        var resources = new List<ResourceType>();
-        resources.AddRange(Enumerable.Repeat(ResourceType.Lumber, 4));
-        resources.AddRange(Enumerable.Repeat(ResourceType.Wool, 4));
-        resources.AddRange(Enumerable.Repeat(ResourceType.Grain, 4));
-        resources.AddRange(Enumerable.Repeat(ResourceType.Brick, 3));
-        resources.AddRange(Enumerable.Repeat(ResourceType.Ore, 3));
-        resources.Add(ResourceType.Desert); // 19th
+        // 2) Resources for any tileCount
+        var resources = GenerateResources(tileCount, rng);
 
-        Shuffle(resources, rng);
+        // 3) Number tokens for any tileCount (one per non-desert tile)
+        var numbersBase = GenerateNumberTokens(tileCount, resources, rng);
 
-        // 3) Prepare number tokens (18 numbers; desert gets 0)
-        var numbers = new List<int> { 2, 3, 3, 4, 4, 5, 5, 6, 6, 8, 8, 9, 9, 10, 10, 11, 11, 12 };
-
-        // We'll try a few times to avoid adjacent 6/8 if enabled
+        // 4) Shuffle numbers and (optionally) avoid adjacent 6/8
         List<int> finalNumbers = null;
-        for (int attempt = 0; attempt < 200; attempt++)
+        for (int attempt = 0; attempt < 300; attempt++)
         {
-            var tryNumbers = new List<int>(numbers);
+            var tryNumbers = new List<int>(numbersBase);
             Shuffle(tryNumbers, rng);
 
-            if (!avoidAdjacentSixEight)
-            {
-                finalNumbers = tryNumbers;
-                break;
-            }
-
-            if (NumbersPassAdjacencyRule(coords, resources, tryNumbers))
+            if (!avoidAdjacentSixEight || NumbersPassAdjacencyRule(coords, resources, tryNumbers))
             {
                 finalNumbers = tryNumbers;
                 break;
             }
         }
+        if (finalNumbers == null) finalNumbers = numbersBase;
 
-        if (finalNumbers == null)
-        {
-            // fallback
-            finalNumbers = new List<int>(numbers);
-            Shuffle(finalNumbers, rng);
-        }
-
-        // 4) Spawn tiles and assign resource + number
+        // 5) Spawn tiles
         int numIndex = 0;
         for (int i = 0; i < coords.Count; i++)
         {
             var coord = coords[i];
             var res = resources[i];
 
-            var tile = Instantiate(hexPrefab, coord.ToWorld(hexSize), Quaternion.identity);
+            var tile = Instantiate(
+                hexPrefab,
+                coord.ToWorld(hexSize),
+                Quaternion.identity
+
+            );
+
             tile.coord = coord;
             tile.resource = res;
 
@@ -99,14 +95,109 @@ public class BoardGenerator : MonoBehaviour
                 tile.hasRobber = false;
             }
 
+            tile.RefreshVisual();
+
             Tiles.Add(tile);
             tileByCoord[coord] = tile;
         }
 
-        // 5) Build node+edge graph
+        // 6) Build graph (nodes + edges)
         BuildGraph();
+
+        Debug.Log($"Spawned Tiles={Tiles.Count} Nodes={Nodes.Count} Edges={Edges.Count} (radius={boardRadius})", this);
+    }
+    private List<ResourceType> GenerateResources(int tileCount, System.Random rng)
+    {
+        // About 1 desert per 19 tiles (19->1, 37->2, 61->3)
+        int desertCount = Mathf.Max(1, Mathf.RoundToInt(tileCount / 19f));
+        int nonDesert = tileCount - desertCount;
+
+        // Classic Catan ratios over 18 non-desert tiles:
+        // Lumber 4, Wool 4, Grain 4, Brick 3, Ore 3
+        float rLumber = 4f / 18f;
+        float rWool = 4f / 18f;
+        float rGrain = 4f / 18f;
+        float rBrick = 3f / 18f;
+        float rOre = 3f / 18f;
+
+        int lumber = Mathf.RoundToInt(nonDesert * rLumber);
+        int wool = Mathf.RoundToInt(nonDesert * rWool);
+        int grain = Mathf.RoundToInt(nonDesert * rGrain);
+        int brick = Mathf.RoundToInt(nonDesert * rBrick);
+        int ore = Mathf.RoundToInt(nonDesert * rOre);
+
+        // Fix rounding to match exactly
+        int sum = lumber + wool + grain + brick + ore;
+        while (sum < nonDesert) { lumber++; sum++; }                 // add extras
+        while (sum > nonDesert && lumber > 0) { lumber--; sum--; }   // remove if overshot
+
+        var list = new List<ResourceType>(tileCount);
+        list.AddRange(Enumerable.Repeat(ResourceType.Desert, desertCount));
+        list.AddRange(Enumerable.Repeat(ResourceType.Lumber, lumber));
+        list.AddRange(Enumerable.Repeat(ResourceType.Wool, wool));
+        list.AddRange(Enumerable.Repeat(ResourceType.Grain, grain));
+        list.AddRange(Enumerable.Repeat(ResourceType.Brick, brick));
+        list.AddRange(Enumerable.Repeat(ResourceType.Ore, ore));
+
+        // Safety: ensure exact size
+        while (list.Count < tileCount) list.Add(ResourceType.Lumber);
+        if (list.Count > tileCount) list.RemoveRange(tileCount, list.Count - tileCount);
+
+        Shuffle(list, rng);
+        return list;
     }
 
+    private List<int> GenerateNumberTokens(int tileCount, List<ResourceType> resources, System.Random rng)
+    {
+        // One number per non-desert tile
+        int nonDesert = resources.Count(r => r != ResourceType.Desert);
+
+        // Classic counts for 18 tokens
+        var baseCounts = new Dictionary<int, int>
+    {
+        {2,1},{3,2},{4,2},{5,2},{6,2},{8,2},{9,2},{10,2},{11,2},{12,1}
+    };
+
+        float scale = nonDesert / 18f;
+
+        // Scale each count
+        var counts = baseCounts.ToDictionary(
+            kv => kv.Key,
+            kv => Mathf.Max(0, Mathf.RoundToInt(kv.Value * scale))
+        );
+
+        int total = counts.Values.Sum();
+
+        // Adjust to match exactly
+        int[] adjustOrder = { 6, 8, 5, 9, 4, 10, 3, 11, 2, 12 }; // keep good probabilities
+        while (total < nonDesert)
+        {
+            foreach (var n in adjustOrder)
+            {
+                if (total >= nonDesert) break;
+                counts[n]++; total++;
+            }
+        }
+        while (total > nonDesert)
+        {
+            foreach (var n in adjustOrder)
+            {
+                if (total <= nonDesert) break;
+                if (counts[n] > 0) { counts[n]--; total--; }
+            }
+        }
+
+        var tokens = new List<int>(nonDesert);
+        foreach (var kv in counts)
+            tokens.AddRange(Enumerable.Repeat(kv.Key, kv.Value));
+
+        // Safety: exact size
+        while (tokens.Count < nonDesert) tokens.Add(6);
+        if (tokens.Count > nonDesert) tokens.RemoveRange(nonDesert, tokens.Count - nonDesert);
+
+        Shuffle(tokens, rng);
+        return tokens;
+    }
     private List<AxialCoord> GenerateRadiusCoords(int radius)
     {
         var list = new List<AxialCoord>();
