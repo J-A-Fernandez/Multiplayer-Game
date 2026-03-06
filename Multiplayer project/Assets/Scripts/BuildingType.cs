@@ -2,6 +2,6 @@ using UnityEngine;
 
     public enum BuildingType
     {
-        Setlement,
+        Settlement,
         City
     }

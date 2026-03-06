@@ -67,17 +67,41 @@ public class BuildController : MonoBehaviour
         if (mode != BuildMode.Settlement) return;
         if (node == null) return;
 
-        // Basic rule: empty + no neighbor buildings
-        if (node.building != null) return;
-        if (node.HasNeighborBuilding()) return;
+        // If occupied, show marker for the owner (so you can SEE it) then stop
+        if (node.building != null)
+        {
+            Debug.Log("Blocked: already occupied");
+            ShowMarker(node, players[node.building.ownerId].playerColor);
+            return;
+        }
 
-        node.building = new Building(currentPlayerId, BuildingType.Setlement);
+        if (node.HasNeighborBuilding())
+        {
+            Debug.Log("Blocked: neighbor building too close");
+            return;
+        }
 
-        // Simple visual feedback: tint the node sprite to player color (if it has one)
-        var sr = node.GetComponent<SpriteRenderer>();
-        if (sr != null) sr.color = CurrentPlayer.playerColor;
+        node.building = new Building(currentPlayerId, BuildingType.Settlement);
+        Debug.Log($"PLACED settlement on node {node.id} for P{currentPlayerId}");
 
-        Debug.Log($"Placed settlement for P{currentPlayerId} on node {node.id}");
+        ShowMarker(node, CurrentPlayer.playerColor);
+    }
+
+    private void ShowMarker(Intersection node, Color color)
+    {
+        var marker = node.transform.Find("Marker");
+        var sr = marker ? marker.GetComponent<SpriteRenderer>() : null;
+
+        if (sr == null)
+        {
+            Debug.LogWarning("Marker not found. Add a child named 'Marker' with a SpriteRenderer to the Intersection prefab.");
+            return;
+        }
+
+        sr.enabled = true;
+        sr.color = color;
+        sr.sortingOrder = 200;                 // always on top
+        marker.localScale = Vector3.one * 0.25f; // make it visible
     }
 
     public void TryPlaceRoad(RoadEdge edge)
