@@ -22,4 +22,5 @@ public class Playerstate
             case ResourceType.Desert: break;
         }
     }
+
 }

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 
@@ -231,12 +232,23 @@ public class BoardGenerator : MonoBehaviour
                 if (!nodeByPosKey.TryGetValue(key, out var node))
                 {
                     node = Instantiate(nodePrefab, cornerPos, Quaternion.identity);
+
+                    node.transform.localScale = Vector3.one;
+                    node.transform.rotation = Quaternion.identity;
+
                     node.id = nextNodeId++;
+
+                    // ? Reset state (important)
+                    node.building = null;
+                    node.adjacentTiles.Clear();
+                    node.edges.Clear();
+
                     nodeByPosKey[key] = node;
                     Nodes.Add(node);
                 }
 
                 tile.corners[i] = node;
+
                 if (!node.adjacentTiles.Contains(tile))
                     node.adjacentTiles.Add(tile);
             }
@@ -256,11 +268,23 @@ public class BoardGenerator : MonoBehaviour
                 if (!edgeByNodePair.TryGetValue(pairKey, out var edge))
                 {
                     Vector2 mid = (a.transform.position + b.transform.position) * 0.5f;
+
                     float angle = Mathf.Atan2(
                         b.transform.position.y - a.transform.position.y,
-                        b.transform.position.x - a.transform.position.x) * Mathf.Rad2Deg;
+                        b.transform.position.x - a.transform.position.x
+                    ) * Mathf.Rad2Deg;
 
                     edge = Instantiate(edgePrefab, mid, Quaternion.Euler(0, 0, angle));
+
+                    edge.transform.localScale = Vector3.one;
+
+                    var visual = edge.transform.Find("Visual");
+                    if (visual != null)
+                    {
+                        visual.localPosition = Vector3.zero;
+                        visual.localRotation = Quaternion.identity;
+                    }
+
                     edge.Init(a, b);
 
                     edgeByNodePair[pairKey] = edge;

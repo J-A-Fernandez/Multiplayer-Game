@@ -1,5 +1,5 @@
 using UnityEngine;
-//using TMPro;
+using TMPro;
 
 public class HexTile : MonoBehaviour
 {
@@ -8,13 +8,19 @@ public class HexTile : MonoBehaviour
     public int number; //Tile numbers for dice roll
     public bool hasRobber; //Robber on tile
 
+    [SerializeField] private TMP_Text numberText;
+
     public Intersection[] corners = new Intersection[6];
 
     [Header("Visuals (assign in prefab)")]
     [SerializeField] private SpriteRenderer fillRenderer;
-
     private void Awake()
     {
+        if (numberText == null)
+        {
+            var t = transform.Find("NumberText");
+            if (t != null) numberText = t.GetComponent<TMP_Text>();
+        }
         if (fillRenderer == null)
         {
             var fill = transform.Find("Fill");
@@ -28,6 +34,10 @@ public class HexTile : MonoBehaviour
     {
         if (fillRenderer != null)
             fillRenderer.color = ResourceColor(resource);
+
+        if (numberText != null)
+            numberText.text = (number == 0) ? "" : number.ToString();
+
         Debug.Log($"{coord} resource={resource} fillNull={(fillRenderer == null)}");
     }
 
