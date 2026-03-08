@@ -1,16 +1,34 @@
 using UnityEngine;
 
 [System.Serializable]
-public class Playerstate
+public class PlayerState
 {
     public int playerId;
     public Color playerColor = Color.white;
 
+    // Resources
     public int brick, lumber, wool, grain, ore;
 
+    // Victory points
     public int victoryPoints;
 
-    public void AddResource(ResourceType type , int amount)
+    // Largest Army
+    public int knightsPlayed;
+
+    // Dev cards (playable)
+    public int devKnight;
+    public int devRoadBuilding;
+    public int devYearOfPlenty;
+    public int devMonopoly;
+    public int devVictoryPoint;
+
+    // Dev cards bought THIS turn (locked until next turn)
+    public int newDevKnight;
+    public int newDevRoadBuilding;
+    public int newDevYearOfPlenty;
+    public int newDevMonopoly;
+
+    public void AddResource(ResourceType type, int amount)
     {
         switch (type)
         {
@@ -23,4 +41,5 @@ public class Playerstate
         }
     }
 
+    public int TotalResources() => brick + lumber + wool + grain + ore;
 }

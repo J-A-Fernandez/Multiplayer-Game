@@ -38,6 +38,10 @@ public class HexTile : MonoBehaviour
         if (numberText != null)
             numberText.text = (number == 0) ? "" : number.ToString();
 
+        var c = ResourceColor(resource);
+        if (hasRobber) c *= 0.6f;   // darken tile
+        fillRenderer.color = c;
+
         Debug.Log($"{coord} resource={resource} fillNull={(fillRenderer == null)}");
     }
 
