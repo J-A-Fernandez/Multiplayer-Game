@@ -4,10 +4,8 @@ using UnityEngine;
 public class BoardClickManager : MonoBehaviour
 {
     public BuildController build;
-
-    [Header("Click priority")]
-    public float intersectionPickRadius = 0.35f; // larger = easier to click nodes
-    public float roadPickRadius = 0.20f;
+    public float intersectionPickRadius = 0.35f;
+    public float roadPickRadius = 0.35f;
 
     private void Awake()
     {
@@ -21,40 +19,31 @@ public class BoardClickManager : MonoBehaviour
 
         Vector2 world = Camera.main.ScreenToWorldPoint(Input.mousePosition);
 
-        // ? Decide what to pick based on mode
-        if (build.mode == BuildController.BuildMode.Settlement)
+        // ? capture mode BEFORE we call any placement (mode might change during the call)
+        var clickMode = build.mode;
+
+        if (clickMode == BuildController.BuildMode.Settlement)
         {
-            var hitsN = Physics2D.OverlapCircleAll(world, intersectionPickRadius);
-            var node = hitsN
-                .Select(h => h.GetComponent<Intersection>())
-                .Where(n => n != null)
-                .OrderBy(n => Vector2.Distance(world, n.transform.position))
-                .FirstOrDefault();
+            var hits = Physics2D.OverlapCircleAll(world, intersectionPickRadius);
+            var node = hits.Select(h => h.GetComponent<Intersection>())
+                           .Where(n => n != null)
+                           .OrderBy(n => Vector2.Distance(world, n.transform.position))
+                           .FirstOrDefault();
 
             if (node != null) build.TryPlaceSettlement(node);
             return;
         }
 
-        if (build.mode == BuildController.BuildMode.Road)
+        if (clickMode == BuildController.BuildMode.Road)
         {
-            var hitsE = Physics2D.OverlapCircleAll(world, roadPickRadius);
-            var edge = hitsE
-                .Select(h => h.GetComponent<RoadEdge>())
-                .Where(e => e != null)
-                .OrderBy(e => Vector2.Distance(world, e.transform.position))
-                .FirstOrDefault();
+            var hits = Physics2D.OverlapCircleAll(world, roadPickRadius);
+            var edge = hits.Select(h => h.GetComponent<RoadEdge>())
+                           .Where(e => e != null)
+                           .OrderBy(e => Vector2.Distance(world, e.transform.position))
+                           .FirstOrDefault();
 
             if (edge != null) build.TryPlaceRoad(edge);
             return;
         }
-
-        // mode == None -> do nothing (for now)
-    }
-
-    private void OnDrawGizmosSelected()
-    {
-        if (!Camera.main) return;
-        Gizmos.color = Color.yellow;
-        Gizmos.DrawWireSphere(Camera.main.ScreenToWorldPoint(Input.mousePosition), intersectionPickRadius);
     }
 }
