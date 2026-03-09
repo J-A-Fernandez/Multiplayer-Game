@@ -128,7 +128,7 @@ public class NetworkCatanManager : NetworkBehaviour
 
     private bool IsTurnOwner(RpcParams rpcParams)
     {
-        // MVP: map playerId = clientId
+        // MVP mapping: playerId == clientId (Host=0, first client=1, etc.)
         ulong sender = rpcParams.Receive.SenderClientId;
         return (int)sender == build.currentPlayerId;
     }
@@ -160,16 +160,16 @@ public class NetworkCatanManager : NetworkBehaviour
             roads.Add(e.ownerId);
         }
 
-        // robber location
-        int rq = 999, rr = 999;
+        // ✅ tiles packed: q, r, resourceInt, number, robber(0/1)
+        var tiles = new List<int>(board.Tiles.Count * 5);
         foreach (var t in board.Tiles)
         {
-            if (t != null && t.hasRobber)
-            {
-                rq = t.coord.q;
-                rr = t.coord.r;
-                break;
-            }
+            if (t == null) continue;
+            tiles.Add(t.coord.q);
+            tiles.Add(t.coord.r);
+            tiles.Add((int)t.resource);
+            tiles.Add(t.number);
+            tiles.Add(t.hasRobber ? 1 : 0);
         }
 
         // players packed: brick,lumber,wool,grain,ore,vp,knights
@@ -197,7 +197,7 @@ public class NetworkCatanManager : NetworkBehaviour
             build.WinnerId,
             buildings.ToArray(),
             roads.ToArray(),
-            rq, rr,
+            tiles.ToArray(),    // ✅ NEW: map sync
             pdata
         );
     }
@@ -212,21 +212,23 @@ public class NetworkCatanManager : NetworkBehaviour
         int winnerId,
         int[] buildingsPacked,
         int[] roadsPacked,
-        int robberQ, int robberR,
+        int[] tilesPacked,     // ✅ NEW: map sync
         int[] playerPacked
     )
     {
         if (build == null || board == null) return;
         if (board.Nodes == null || board.Edges == null || board.Tiles == null) return;
 
+        // Turn/meta
         build.currentPlayerId = currentPid;
         build.phase = (BuildController.GamePhase)phaseInt;
 
-        // These must exist in your BuildController ONCE (no duplicates!)
+        // These two must exist in BuildController EXACTLY ONCE:
+        // Net_SetTurnFlags(bool,bool) and Net_SetGameMeta(bool,int)
         build.Net_SetTurnFlags(hasRolled, awaitingRobber);
         build.Net_SetGameMeta(isGameOver, winnerId);
 
-        // apply players
+        // Players
         int nPlayers = build.players.Length;
         for (int i = 0; i < nPlayers; i++)
         {
@@ -241,7 +243,37 @@ public class NetworkCatanManager : NetworkBehaviour
             p.knightsPlayed = playerPacked[b + 6];
         }
 
-        // clear buildings
+        // ✅ Build fast lookup for tiles by coord
+        var tileByCoord = new Dictionary<(int q, int r), HexTile>(board.Tiles.Count);
+        foreach (var t in board.Tiles)
+        {
+            if (t == null) continue;
+            tileByCoord[(t.coord.q, t.coord.r)] = t;
+        }
+
+        // ✅ Apply tile layout from host
+        // tilesPacked = [q,r,res,number,robber, q,r,res,number,robber, ...]
+        for (int i = 0; i + 4 < tilesPacked.Length; i += 5)
+        {
+            int q = tilesPacked[i + 0];
+            int r = tilesPacked[i + 1];
+            var res = (ResourceType)tilesPacked[i + 2];
+            int num = tilesPacked[i + 3];
+            bool rob = tilesPacked[i + 4] == 1;
+
+            if (tileByCoord.TryGetValue((q, r), out var tile))
+            {
+                tile.resource = res;
+                tile.number = num;
+                tile.hasRobber = rob;
+            }
+        }
+
+        // Refresh tiles after applying
+        foreach (var t in board.Tiles)
+            if (t != null) t.RefreshVisual();
+
+        // Clear buildings visuals/state
         foreach (var n in board.Nodes)
         {
             if (n == null) continue;
@@ -250,21 +282,21 @@ public class NetworkCatanManager : NetworkBehaviour
             if (marker != null) marker.gameObject.SetActive(false);
         }
 
-        // apply buildings
+        // Apply buildings
         for (int i = 0; i + 2 < buildingsPacked.Length; i += 3)
         {
             int nodeId = buildingsPacked[i];
             int ownerId = buildingsPacked[i + 1];
-            bool isCity = buildingsPacked[i + 2] == 1;
+            bool isCityB = buildingsPacked[i + 2] == 1;
 
             var node = board.Nodes.FirstOrDefault(n => n != null && n.id == nodeId);
             if (node == null) continue;
 
-            node.building = new Building(ownerId, isCity ? BuildingType.City : BuildingType.Settlement);
-            ShowMarker(node, build.players[ownerId].playerColor, isCity ? 0.45f : 0.30f, build.markerSprite);
+            node.building = new Building(ownerId, isCityB ? BuildingType.City : BuildingType.Settlement);
+            ShowMarker(node, build.players[ownerId].playerColor, isCityB ? 0.45f : 0.30f, build.markerSprite);
         }
 
-        // clear roads
+        // Clear roads visuals + ownership
         foreach (var e in board.Edges)
         {
             if (e == null) continue;
@@ -272,7 +304,7 @@ public class NetworkCatanManager : NetworkBehaviour
             TintRoad(e, Color.white);
         }
 
-        // apply roads
+        // Apply roads
         for (int i = 0; i + 2 < roadsPacked.Length; i += 3)
         {
             int aId = roadsPacked[i];
@@ -285,21 +317,9 @@ public class NetworkCatanManager : NetworkBehaviour
             edge.ownerId = ownerId;
             TintRoad(edge, build.players[ownerId].playerColor);
         }
-
-        // robber
-        foreach (var t in board.Tiles)
-            if (t != null) t.hasRobber = false;
-
-        if (robberQ != 999)
-        {
-            var tile = board.Tiles.FirstOrDefault(t => t != null && t.coord.q == robberQ && t.coord.r == robberR);
-            if (tile != null) tile.hasRobber = true;
-        }
-
-        foreach (var t in board.Tiles)
-            if (t != null) t.RefreshVisual();
     }
 
+    // ---------- helpers ----------
     private RoadEdge FindEdge(int aId, int bId)
     {
         foreach (var e in board.Edges)
