@@ -2928,17 +2928,6 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 2b95f8cdc02873b43b9d0afaebed888b, type: 3}
---- !u!114 &3753823053885610782 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 5342359357698183600, guid: 2b95f8cdc02873b43b9d0afaebed888b, type: 3}
-  m_PrefabInstance: {fileID: 3753823053885610781}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 2c2e59e0923c649449d262fa163fd1e2, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::NetworkCatanManager
 --- !u!1001 &4427183778705193326
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -3245,4 +3234,3 @@ SceneRoots:
   - {fileID: 1564466315}
   - {fileID: 3753823053885610781}
   - {fileID: 1139867953541210408}
-  - {fileID: 1093282830}
