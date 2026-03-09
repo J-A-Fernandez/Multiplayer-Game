@@ -1545,7 +1545,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 53a13e4d5f8b62746941ac10440e5b0b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NetworkBoardClickManager
-  build: {fileID: 1770651384}
+  build: {fileID: 1770651386}
   net: {fileID: 3753823053885610782}
   intersectionPickRadius: 0.35
   roadPickRadius: 0.35
@@ -1718,7 +1718,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3ae725e543a41304684b3f6072b14aeb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GameHUD
-  build: {fileID: 1770651384}
+  build: {fileID: 0}
   statusText: {fileID: 750145632}
   resourcesText: {fileID: 68554443}
   devCardsText: {fileID: 0}
@@ -2411,15 +2411,16 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1770651383}
-  - component: {fileID: 1770651384}
   - component: {fileID: 1770651385}
+  - component: {fileID: 1770651387}
+  - component: {fileID: 1770651386}
   m_Layer: 0
   m_Name: GameManager
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &1770651383
 Transform:
   m_ObjectHideFlags: 0
@@ -2435,7 +2436,23 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1770651384
+--- !u!114 &1770651385
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1770651382}
+  m_Enabled: 0
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8fbb950a1cc9ac45875bce62f99b55f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BoardClickManager
+  build: {fileID: 0}
+  intersectionPickRadius: 0.35
+  roadPickRadius: 0.35
+  tilePickRadius: 0.6
+--- !u!114 &1770651386
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -2451,7 +2468,7 @@ MonoBehaviour:
   markerSprite: {fileID: -2413806693520163455, guid: a605e16c574a8744ea2881313acf28fa, type: 3}
   players:
   - playerId: 0
-    playerColor: {r: 1, g: 0, b: 0, a: 1}
+    playerColor: {r: 1, g: 1, b: 1, a: 1}
     brick: 0
     lumber: 0
     wool: 0
@@ -2469,7 +2486,7 @@ MonoBehaviour:
     newDevYearOfPlenty: 0
     newDevMonopoly: 0
   - playerId: 0
-    playerColor: {r: 0, g: 0.08836129, b: 0.9150943, a: 1}
+    playerColor: {r: 1, g: 1, b: 1, a: 1}
     brick: 0
     lumber: 0
     wool: 0
@@ -2487,7 +2504,7 @@ MonoBehaviour:
     newDevYearOfPlenty: 0
     newDevMonopoly: 0
   - playerId: 0
-    playerColor: {r: 0, g: 0, b: 0, a: 1}
+    playerColor: {r: 1, g: 1, b: 1, a: 1}
     brick: 0
     lumber: 0
     wool: 0
@@ -2505,7 +2522,7 @@ MonoBehaviour:
     newDevYearOfPlenty: 0
     newDevMonopoly: 0
   - playerId: 0
-    playerColor: {r: 0.9622642, g: 0, b: 0.6909662, a: 1}
+    playerColor: {r: 1, g: 1, b: 1, a: 1}
     brick: 0
     lumber: 0
     wool: 0
@@ -2539,7 +2556,7 @@ MonoBehaviour:
   yearOfPlentyChoiceA: 3
   yearOfPlentyChoiceB: 2
   monopolyChoice: 0
---- !u!114 &1770651385
+--- !u!114 &1770651387
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -2548,10 +2565,11 @@ MonoBehaviour:
   m_GameObject: {fileID: 1770651382}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: a8fbb950a1cc9ac45875bce62f99b55f, type: 3}
+  m_Script: {fileID: 11500000, guid: 53a13e4d5f8b62746941ac10440e5b0b, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::BoardClickManager
-  build: {fileID: 1770651384}
+  m_EditorClassIdentifier: Assembly-CSharp::NetworkBoardClickManager
+  build: {fileID: 1770651386}
+  net: {fileID: 3753823053885610782}
   intersectionPickRadius: 0.35
   roadPickRadius: 0.35
   tilePickRadius: 0.6
