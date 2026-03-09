@@ -1,13 +1,15 @@
 using System.Linq;
+using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.EventSystems;
-using Unity.Netcode;
 
 public class NetworkBoardClickManager : MonoBehaviour
 {
+    [Header("Refs")]
     public BuildController build;
     public NetworkCatanManager net;
 
+    [Header("Pick Radius")]
     public float intersectionPickRadius = 0.35f;
     public float roadPickRadius = 0.35f;
     public float tilePickRadius = 0.60f;
@@ -21,72 +23,70 @@ public class NetworkBoardClickManager : MonoBehaviour
     private void Update()
     {
         if (build == null || net == null) return;
+        if (NetworkManager.Singleton == null) return;
+        if (!NetworkManager.Singleton.IsConnectedClient) return;
+
         if (!Input.GetMouseButtonDown(0)) return;
 
+        // prevent clicks through UI
         if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
             return;
 
-        // only allow clicking on your turn (quick usability)
-        int localPid = (int)NetworkManager.Singleton.LocalClientId;
-        if (localPid != build.currentPlayerId) return;
+        var cam = Camera.main;
+        if (cam == null) return;
 
-        Vector2 world = Camera.main.ScreenToWorldPoint(Input.mousePosition);
+        Vector2 world = cam.ScreenToWorldPoint(Input.mousePosition);
 
-        // robber overrides everything
-        if (build.AwaitingRobberMove)
+        switch (build.mode)
         {
-            var hits = Physics2D.OverlapCircleAll(world, tilePickRadius);
-            var tile = hits.Select(h => h.GetComponent<HexTile>())
-                .Where(t => t != null)
-                .OrderBy(t => Vector2.Distance(world, t.transform.position))
-                .FirstOrDefault();
+            case BuildController.BuildMode.Settlement:
+            {
+                var hits = Physics2D.OverlapCircleAll(world, intersectionPickRadius);
+                var node = hits.Select(h => h.GetComponent<Intersection>())
+                               .Where(n => n != null)
+                               .OrderBy(n => Vector2.Distance(world, n.transform.position))
+                               .FirstOrDefault();
 
-            if (tile != null)
-                net.RequestMoveRobberServerRpc(tile.coord.q, tile.coord.r);
+                if (node != null) net.RequestPlaceSettlement(node.id);
+                break;
+            }
 
-            return;
-        }
+            case BuildController.BuildMode.City:
+            {
+                var hits = Physics2D.OverlapCircleAll(world, intersectionPickRadius);
+                var node = hits.Select(h => h.GetComponent<Intersection>())
+                               .Where(n => n != null)
+                               .OrderBy(n => Vector2.Distance(world, n.transform.position))
+                               .FirstOrDefault();
 
-        if (build.mode == BuildController.BuildMode.Settlement)
-        {
-            var hits = Physics2D.OverlapCircleAll(world, intersectionPickRadius);
-            var node = hits.Select(h => h.GetComponent<Intersection>())
-                .Where(n => n != null)
-                .OrderBy(n => Vector2.Distance(world, n.transform.position))
-                .FirstOrDefault();
+                if (node != null) net.RequestUpgradeCity(node.id);
+                break;
+            }
 
-            if (node != null)
-                net.RequestPlaceSettlementServerRpc(node.id);
+            case BuildController.BuildMode.Road:
+            {
+                var hits = Physics2D.OverlapCircleAll(world, roadPickRadius);
+                var edge = hits.Select(h => h.GetComponent<RoadEdge>())
+                               .Where(e => e != null && e.A != null && e.B != null)
+                               .OrderBy(e => Vector2.Distance(world, e.transform.position))
+                               .FirstOrDefault();
 
-            return;
-        }
+                if (edge != null) net.RequestPlaceRoad(edge.A.id, edge.B.id);
+                break;
+            }
 
-        if (build.mode == BuildController.BuildMode.City)
-        {
-            var hits = Physics2D.OverlapCircleAll(world, intersectionPickRadius);
-            var node = hits.Select(h => h.GetComponent<Intersection>())
-                .Where(n => n != null)
-                .OrderBy(n => Vector2.Distance(world, n.transform.position))
-                .FirstOrDefault();
+            case BuildController.BuildMode.Robber:
+            {
+                var hits = Physics2D.OverlapCircleAll(world, tilePickRadius);
+                var tile = hits.Select(h => h.GetComponent<HexTile>())
+                               .Where(t => t != null)
+                               .OrderBy(t => Vector2.Distance(world, t.transform.position))
+                               .FirstOrDefault();
 
-            if (node != null)
-                net.RequestUpgradeCityServerRpc(node.id);
-
-            return;
-        }
-
-        if (build.mode == BuildController.BuildMode.Road)
-        {
-            var hits = Physics2D.OverlapCircleAll(world, roadPickRadius);
-            var edge = hits.Select(h => h.GetComponent<RoadEdge>())
-                .Where(e => e != null)
-                .OrderBy(e => Vector2.Distance(world, e.transform.position))
-                .FirstOrDefault();
-
-            if (edge != null && edge.A != null && edge.B != null)
-                net.RequestPlaceRoadServerRpc(edge.A.id, edge.B.id);
-
-            return;
+                // ✅ correct call (public method, not RPC)
+                if (tile != null) net.RequestMoveRobber(tile.coord.q, tile.coord.r);
+                break;
+            }
         }
     }
 }

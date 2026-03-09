@@ -1,16 +1,21 @@
 using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
 using Unity.Netcode;
 using UnityEngine;
-using System.Collections.Generic;
+
+[RequireComponent(typeof(NetworkObject))]
 public class NetworkCatanManager : NetworkBehaviour
 {
     [Header("Refs")]
     public BoardGenerator board;
     public BuildController build;
 
-    // Everyone reads, only server writes
-    public NetworkVariable<int> mapSeed = new NetworkVariable<int>(
-        0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+    [Header("Sync")]
+    [Range(0.05f, 1f)]
+    public float syncInterval = 0.25f;
+
+    private Coroutine syncLoop;
 
     private void Awake()
     {
@@ -18,79 +23,123 @@ public class NetworkCatanManager : NetworkBehaviour
         if (build == null) build = FindFirstObjectByType<BuildController>();
     }
 
-public override void OnNetworkSpawn()
-{
-    // Auto-find references if not assigned in inspector
-    if (board == null) board = FindFirstObjectByType<BoardGenerator>();
-    if (build == null) build = FindFirstObjectByType<BuildController>();
+    public override void OnNetworkSpawn()
+    {
+        if (board == null) board = FindFirstObjectByType<BoardGenerator>();
+        if (build == null) build = FindFirstObjectByType<BuildController>();
 
-    if (board == null)
-    {
-        Debug.LogError("NetworkCatanManager: BoardGenerator not found. Assign 'board' in inspector.", this);
-        return;
-    }
-    if (build == null)
-    {
-        Debug.LogError("NetworkCatanManager: BuildController not found. Assign 'build' in inspector.", this);
-        return;
-    }
-
-    // Host controls state
-    if (IsServer)
-    {
-        // Make sure board is generated before using it
-        StartCoroutine(WaitThenHostInit());
-    }
-}
-private IEnumerator WaitThenHostInit()
-{
-    for (int i = 0; i < 300; i++)
-    {
-        if (board != null && board.Tiles != null && board.Nodes != null && board.Edges != null &&
-            board.Tiles.Count > 0 && board.Nodes.Count > 0 && board.Edges.Count > 0)
+        if (board == null)
         {
-            break;
+            Debug.LogError("NetworkCatanManager: BoardGenerator not found. Assign 'board' in inspector.", this);
+            return;
         }
-        yield return null;
+        if (build == null)
+        {
+            Debug.LogError("NetworkCatanManager: BuildController not found. Assign 'build' in inspector.", this);
+            return;
+        }
+
+        if (IsServer)
+        {
+            syncLoop = StartCoroutine(ServerSyncLoop());
+        }
     }
 
-    if (board == null || board.Tiles == null || board.Tiles.Count == 0)
+    public override void OnNetworkDespawn()
     {
-        Debug.LogError("NetworkCatanManager: Board never became ready (Tiles empty).");
-        yield break;
+        if (syncLoop != null) StopCoroutine(syncLoop);
+        syncLoop = null;
     }
 
-    // host init here...
-}
-    private void GenerateBoard(int seed)
+    private IEnumerator ServerSyncLoop()
     {
-        if (board == null) return;
+        // Wait until board is ready
+        for (int i = 0; i < 300; i++)
+        {
+            if (board != null && board.Tiles != null && board.Nodes != null && board.Edges != null &&
+                board.Tiles.Count > 0 && board.Nodes.Count > 0 && board.Edges.Count > 0)
+                break;
 
-        board.useRandomSeed = false;
-        board.randomSeed = seed;
-        board.Generate();
+            yield return null;
+        }
+
+        while (IsServer)
+        {
+            SendSnapshotToClients();
+            yield return new WaitForSeconds(syncInterval);
+        }
     }
 
-    private int SenderPid(ServerRpcParams rpcParams) => (int)rpcParams.Receive.SenderClientId;
+    // ========= Public API called by NetworkBoardClickManager =========
+    public void RequestPlaceSettlement(int nodeId) => SubmitPlaceSettlementServerRpc(nodeId);
+    public void RequestPlaceRoad(int aNodeId, int bNodeId) => SubmitPlaceRoadServerRpc(aNodeId, bNodeId);
+    public void RequestUpgradeCity(int nodeId) => SubmitUpgradeCityServerRpc(nodeId);
+    public void RequestMoveRobber(int q, int r) => SubmitMoveRobberServerRpc(q, r);
 
-    private bool IsAllowedTurn(ServerRpcParams rpcParams)
+    // ========= RPCs (Client -> Server) =========
+
+    [Rpc(SendTo.Server)]
+    private void SubmitPlaceSettlementServerRpc(int nodeId, RpcParams rpcParams = default)
     {
-        int pid = SenderPid(rpcParams);
-        if (pid < 0 || pid >= build.players.Length) return false;
-        return pid == build.currentPlayerId;
+        if (!IsServer || build == null || board == null) return;
+        if (!IsTurnOwner(rpcParams)) return;
+
+        var node = board.Nodes.FirstOrDefault(n => n != null && n.id == nodeId);
+        if (node == null) return;
+
+        build.TryPlaceSettlement(node);
     }
 
-    // ----------- FULL STATE SYNC (for joiners) -----------
-
-    [ServerRpc(RequireOwnership = false)]
-    private void RequestFullStateServerRpc(ServerRpcParams rpcParams = default)
+    [Rpc(SendTo.Server)]
+    private void SubmitPlaceRoadServerRpc(int aId, int bId, RpcParams rpcParams = default)
     {
-        SendFullStateToClient(rpcParams.Receive.SenderClientId);
+        if (!IsServer || build == null || board == null) return;
+        if (!IsTurnOwner(rpcParams)) return;
+
+        var edge = FindEdge(aId, bId);
+        if (edge == null) return;
+
+        build.TryPlaceRoad(edge);
     }
 
-    private void SendFullStateToClient(ulong clientId)
+    [Rpc(SendTo.Server)]
+    private void SubmitUpgradeCityServerRpc(int nodeId, RpcParams rpcParams = default)
     {
-        // pack buildings: (nodeId, ownerId, typeInt) where typeInt 0=Settlement 1=City
+        if (!IsServer || build == null || board == null) return;
+        if (!IsTurnOwner(rpcParams)) return;
+
+        var node = board.Nodes.FirstOrDefault(n => n != null && n.id == nodeId);
+        if (node == null) return;
+
+        build.TryUpgradeCity(node);
+    }
+
+    [Rpc(SendTo.Server)]
+    private void SubmitMoveRobberServerRpc(int q, int r, RpcParams rpcParams = default)
+    {
+        if (!IsServer || build == null || board == null) return;
+        if (!IsTurnOwner(rpcParams)) return;
+
+        var tile = board.Tiles.FirstOrDefault(t => t != null && t.coord.q == q && t.coord.r == r);
+        if (tile == null) return;
+
+        build.TryMoveRobber(tile);
+    }
+
+    private bool IsTurnOwner(RpcParams rpcParams)
+    {
+        // MVP: map playerId = clientId
+        ulong sender = rpcParams.Receive.SenderClientId;
+        return (int)sender == build.currentPlayerId;
+    }
+
+    // ========= Snapshot Sync (Server -> Clients) =========
+
+    private void SendSnapshotToClients()
+    {
+        if (!IsServer || build == null || board == null) return;
+
+        // buildings packed: nodeId, ownerId, typeInt (0 settlement, 1 city)
         var buildings = new List<int>(256);
         foreach (var n in board.Nodes)
         {
@@ -100,130 +149,99 @@ private IEnumerator WaitThenHostInit()
             buildings.Add(n.building.type == BuildingType.City ? 1 : 0);
         }
 
-        // pack roads: (aId, bId, ownerId)
+        // roads packed: aId, bId, ownerId
         var roads = new List<int>(512);
         foreach (var e in board.Edges)
         {
-            if (e == null || e.ownerId == -1 || e.A == null || e.B == null) continue;
+            if (e == null || e.A == null || e.B == null) continue;
+            if (e.ownerId == -1) continue;
             roads.Add(e.A.id);
             roads.Add(e.B.id);
             roads.Add(e.ownerId);
         }
 
-        int robberQ = 999, robberR = 999;
+        // robber location
+        int rq = 999, rr = 999;
         foreach (var t in board.Tiles)
         {
             if (t != null && t.hasRobber)
             {
-                robberQ = t.coord.q;
-                robberR = t.coord.r;
+                rq = t.coord.q;
+                rr = t.coord.r;
                 break;
             }
         }
 
-        // pack players: per player [brick,lumber,wool,grain,ore,vp,knights]
-        int pCount = build.players.Length;
-        var pdata = new int[pCount * 7];
-        for (int i = 0; i < pCount; i++)
+        // players packed: brick,lumber,wool,grain,ore,vp,knights
+        int nPlayers = build.players.Length;
+        var pdata = new int[nPlayers * 7];
+        for (int i = 0; i < nPlayers; i++)
         {
             var p = build.players[i];
-            int baseIdx = i * 7;
-            pdata[baseIdx + 0] = p.brick;
-            pdata[baseIdx + 1] = p.lumber;
-            pdata[baseIdx + 2] = p.wool;
-            pdata[baseIdx + 3] = p.grain;
-            pdata[baseIdx + 4] = p.ore;
-            pdata[baseIdx + 5] = p.victoryPoints;
-            pdata[baseIdx + 6] = p.knightsPlayed;
+            int b = i * 7;
+            pdata[b + 0] = p.brick;
+            pdata[b + 1] = p.lumber;
+            pdata[b + 2] = p.wool;
+            pdata[b + 3] = p.grain;
+            pdata[b + 4] = p.ore;
+            pdata[b + 5] = p.victoryPoints;
+            pdata[b + 6] = p.knightsPlayed;
         }
 
-        var target = new ClientRpcParams
-        {
-            Send = new ClientRpcSendParams { TargetClientIds = new[] { clientId } }
-        };
-
-        FullStateClientRpc(
-            mapSeed.Value,
+        SnapshotClientRpc(
             build.currentPlayerId,
             (int)build.phase,
             build.HasRolledThisTurn,
             build.AwaitingRobberMove,
+            build.GameOver,
+            build.WinnerId,
             buildings.ToArray(),
             roads.ToArray(),
-            robberQ,
-            robberR,
-            pdata,
-            target
+            rq, rr,
+            pdata
         );
     }
 
-    [ClientRpc]
-    private void FullStateClientRpc(
-        int seed,
-        int currentPlayerId,
+    [Rpc(SendTo.ClientsAndHost)]
+    private void SnapshotClientRpc(
+        int currentPid,
         int phaseInt,
         bool hasRolled,
         bool awaitingRobber,
+        bool isGameOver,
+        int winnerId,
         int[] buildingsPacked,
         int[] roadsPacked,
-        int robberQ,
-        int robberR,
-        int[] playerPacked,
-        ClientRpcParams _ = default)
+        int robberQ, int robberR,
+        int[] playerPacked
+    )
     {
-        // ensure board exists
-        if (mapSeed.Value == 0) mapSeed.Value = seed;
-        GenerateBoard(seed);
+        if (build == null || board == null) return;
+        if (board.Nodes == null || board.Edges == null || board.Tiles == null) return;
 
-        // clear visuals/state
-        ClearAllBoardState();
-
-        // apply buildings
-        for (int i = 0; i + 2 < buildingsPacked.Length; i += 3)
-        {
-            int nodeId = buildingsPacked[i];
-            int ownerId = buildingsPacked[i + 1];
-            bool isCity = buildingsPacked[i + 2] == 1;
-            ApplySettlementVisual(nodeId, ownerId, isCity);
-        }
-
-        // apply roads
-        for (int i = 0; i + 2 < roadsPacked.Length; i += 3)
-        {
-            int aId = roadsPacked[i];
-            int bId = roadsPacked[i + 1];
-            int ownerId = roadsPacked[i + 2];
-            ApplyRoadVisual(aId, bId, ownerId);
-        }
-
-        // apply robber
-        if (robberQ != 999)
-            ApplyRobberVisual(robberQ, robberR);
-
-        // turn state
-        build.currentPlayerId = currentPlayerId;
+        build.currentPlayerId = currentPid;
         build.phase = (BuildController.GamePhase)phaseInt;
+
+        // These must exist in your BuildController ONCE (no duplicates!)
         build.Net_SetTurnFlags(hasRolled, awaitingRobber);
+        build.Net_SetGameMeta(isGameOver, winnerId);
 
-        // players
-        int pCount = build.players.Length;
-        for (int p = 0; p < pCount; p++)
+        // apply players
+        int nPlayers = build.players.Length;
+        for (int i = 0; i < nPlayers; i++)
         {
-            int baseIdx = p * 7;
-            var ps = build.players[p];
-            ps.brick = playerPacked[baseIdx + 0];
-            ps.lumber = playerPacked[baseIdx + 1];
-            ps.wool = playerPacked[baseIdx + 2];
-            ps.grain = playerPacked[baseIdx + 3];
-            ps.ore = playerPacked[baseIdx + 4];
-            ps.victoryPoints = playerPacked[baseIdx + 5];
-            ps.knightsPlayed = playerPacked[baseIdx + 6];
+            int b = i * 7;
+            var p = build.players[i];
+            p.brick = playerPacked[b + 0];
+            p.lumber = playerPacked[b + 1];
+            p.wool = playerPacked[b + 2];
+            p.grain = playerPacked[b + 3];
+            p.ore = playerPacked[b + 4];
+            p.victoryPoints = playerPacked[b + 5];
+            p.knightsPlayed = playerPacked[b + 6];
         }
-    }
 
-    private void ClearAllBoardState()
-    {
-        // clear buildings/markers
+        // clear buildings
         foreach (var n in board.Nodes)
         {
             if (n == null) continue;
@@ -232,122 +250,54 @@ private IEnumerator WaitThenHostInit()
             if (marker != null) marker.gameObject.SetActive(false);
         }
 
+        // apply buildings
+        for (int i = 0; i + 2 < buildingsPacked.Length; i += 3)
+        {
+            int nodeId = buildingsPacked[i];
+            int ownerId = buildingsPacked[i + 1];
+            bool isCity = buildingsPacked[i + 2] == 1;
+
+            var node = board.Nodes.FirstOrDefault(n => n != null && n.id == nodeId);
+            if (node == null) continue;
+
+            node.building = new Building(ownerId, isCity ? BuildingType.City : BuildingType.Settlement);
+            ShowMarker(node, build.players[ownerId].playerColor, isCity ? 0.45f : 0.30f, build.markerSprite);
+        }
+
         // clear roads
         foreach (var e in board.Edges)
         {
             if (e == null) continue;
             e.ownerId = -1;
-            var vis = e.transform.Find("Visual");
-            var sr = vis ? vis.GetComponent<SpriteRenderer>() : null;
-            if (sr != null) sr.color = Color.white;
+            TintRoad(e, Color.white);
         }
 
-        // clear robber
-        foreach (var t in board.Tiles)
+        // apply roads
+        for (int i = 0; i + 2 < roadsPacked.Length; i += 3)
         {
-            if (t == null) continue;
-            t.hasRobber = false;
-            t.RefreshVisual();
+            int aId = roadsPacked[i];
+            int bId = roadsPacked[i + 1];
+            int ownerId = roadsPacked[i + 2];
+
+            var edge = FindEdge(aId, bId);
+            if (edge == null) continue;
+
+            edge.ownerId = ownerId;
+            TintRoad(edge, build.players[ownerId].playerColor);
         }
-    }
 
-    // ----------- SERVER RPCs: intents from clients -----------
+        // robber
+        foreach (var t in board.Tiles)
+            if (t != null) t.hasRobber = false;
 
-    [ServerRpc(RequireOwnership = false)]
-    public void RequestRollServerRpc(ServerRpcParams rpcParams = default)
-    {
-        if (!IsAllowedTurn(rpcParams)) return;
-        build.RollDiceAndDistribute();
-        SendFullStateToClient(rpcParams.Receive.SenderClientId); // feedback to caller
-        // and broadcast to everyone
-        foreach (var id in NetworkManager.Singleton.ConnectedClientsIds)
-            SendFullStateToClient(id);
-    }
+        if (robberQ != 999)
+        {
+            var tile = board.Tiles.FirstOrDefault(t => t != null && t.coord.q == robberQ && t.coord.r == robberR);
+            if (tile != null) tile.hasRobber = true;
+        }
 
-    [ServerRpc(RequireOwnership = false)]
-    public void RequestEndTurnServerRpc(ServerRpcParams rpcParams = default)
-    {
-        if (!IsAllowedTurn(rpcParams)) return;
-        build.EndTurn();
-        foreach (var id in NetworkManager.Singleton.ConnectedClientsIds)
-            SendFullStateToClient(id);
-    }
-
-    [ServerRpc(RequireOwnership = false)]
-    public void RequestPlaceSettlementServerRpc(int nodeId, ServerRpcParams rpcParams = default)
-    {
-        if (!IsAllowedTurn(rpcParams)) return;
-
-        var node = FindNode(nodeId);
-        if (node == null) return;
-
-        var prevMode = build.mode;
-        build.mode = BuildController.BuildMode.Settlement;
-        build.TryPlaceSettlement(node);
-        build.mode = prevMode;
-
-        foreach (var id in NetworkManager.Singleton.ConnectedClientsIds)
-            SendFullStateToClient(id);
-    }
-
-    [ServerRpc(RequireOwnership = false)]
-    public void RequestUpgradeCityServerRpc(int nodeId, ServerRpcParams rpcParams = default)
-    {
-        if (!IsAllowedTurn(rpcParams)) return;
-
-        var node = FindNode(nodeId);
-        if (node == null) return;
-
-        var prevMode = build.mode;
-        build.mode = BuildController.BuildMode.City;
-        build.TryUpgradeCity(node);
-        build.mode = prevMode;
-
-        foreach (var id in NetworkManager.Singleton.ConnectedClientsIds)
-            SendFullStateToClient(id);
-    }
-
-    [ServerRpc(RequireOwnership = false)]
-    public void RequestPlaceRoadServerRpc(int aId, int bId, ServerRpcParams rpcParams = default)
-    {
-        if (!IsAllowedTurn(rpcParams)) return;
-
-        var edge = FindEdge(aId, bId);
-        if (edge == null) return;
-
-        var prevMode = build.mode;
-        build.mode = BuildController.BuildMode.Road;
-        build.TryPlaceRoad(edge);
-        build.mode = prevMode;
-
-        foreach (var id in NetworkManager.Singleton.ConnectedClientsIds)
-            SendFullStateToClient(id);
-    }
-
-    [ServerRpc(RequireOwnership = false)]
-    public void RequestMoveRobberServerRpc(int q, int r, ServerRpcParams rpcParams = default)
-    {
-        if (!IsAllowedTurn(rpcParams)) return;
-
-        // only when server says awaiting robber
-        if (!build.AwaitingRobberMove) return;
-
-        var tile = FindTile(q, r);
-        if (tile == null) return;
-
-        build.TryMoveRobber(tile);
-
-        foreach (var id in NetworkManager.Singleton.ConnectedClientsIds)
-            SendFullStateToClient(id);
-    }
-
-    // ----------- Local lookups + visuals -----------
-
-    private Intersection FindNode(int nodeId)
-    {
-        foreach (var n in board.Nodes)
-            if (n != null && n.id == nodeId) return n;
-        return null;
+        foreach (var t in board.Tiles)
+            if (t != null) t.RefreshVisual();
     }
 
     private RoadEdge FindEdge(int aId, int bId)
@@ -361,22 +311,9 @@ private IEnumerator WaitThenHostInit()
         return null;
     }
 
-    private HexTile FindTile(int q, int r)
+    private static void ShowMarker(Intersection node, Color color, float size, Sprite sprite)
     {
-        foreach (var t in board.Tiles)
-        {
-            if (t == null) continue;
-            if (t.coord.q == q && t.coord.r == r) return t;
-        }
-        return null;
-    }
-
-    private void ApplySettlementVisual(int nodeId, int ownerId, bool isCity)
-    {
-        var node = FindNode(nodeId);
-        if (node == null) return;
-
-        node.building = new Building(ownerId, isCity ? BuildingType.City : BuildingType.Settlement);
+        if (sprite == null) return;
 
         var markerT = node.transform.Find("Marker");
         if (markerT == null)
@@ -391,42 +328,21 @@ private IEnumerator WaitThenHostInit()
 
         var sr = markerT.GetComponent<SpriteRenderer>();
         if (sr == null) sr = markerT.gameObject.AddComponent<SpriteRenderer>();
-        if (sr.sprite == null) sr.sprite = build.markerSprite;
-
-        sr.color = build.players[ownerId].playerColor;
+        sr.sprite = sprite;
+        sr.color = color;
         sr.sortingOrder = 1000;
 
-        markerT.localScale = Vector3.one * (isCity ? 0.45f : 0.30f);
+        markerT.localScale = Vector3.one * size;
     }
 
-    private void ApplyRoadVisual(int aId, int bId, int ownerId)
+    private static void TintRoad(RoadEdge edge, Color c)
     {
-        var edge = FindEdge(aId, bId);
-        if (edge == null) return;
-
-        edge.ownerId = ownerId;
-
         var vis = edge.transform.Find("Visual");
         var sr = vis ? vis.GetComponent<SpriteRenderer>() : null;
         if (sr != null)
         {
-            sr.color = build.players[ownerId].playerColor;
+            sr.color = c;
             sr.sortingOrder = 500;
         }
-    }
-
-    private void ApplyRobberVisual(int q, int r)
-    {
-        foreach (var t in board.Tiles)
-        {
-            if (t == null) continue;
-            t.hasRobber = false;
-            t.RefreshVisual();
-        }
-
-        var tile = FindTile(q, r);
-        if (tile == null) return;
-        tile.hasRobber = true;
-        tile.RefreshVisual();
     }
 }
