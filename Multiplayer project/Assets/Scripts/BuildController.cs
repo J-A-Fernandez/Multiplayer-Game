@@ -1178,11 +1178,7 @@ public class BuildController : MonoBehaviour
         hasRolledThisTurn = hasRolled;
         awaitingRobberMove = awaitingRobber;
     }
-    public void Net_SetTurnFlags(bool hasRolled, bool awaitingRobber)
-    {
-        hasRolledThisTurn = hasRolled;
-        awaitingRobberMove = awaitingRobber;
-    }
+
 
     public void Net_SetGameMeta(bool isGameOver, int winId)
     {
