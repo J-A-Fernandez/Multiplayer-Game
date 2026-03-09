@@ -1,5 +1,6 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 public class BuildController : MonoBehaviour
@@ -7,6 +8,9 @@ public class BuildController : MonoBehaviour
     public enum BuildMode { None, Settlement, Road, Robber, City }
     public enum GamePhase { Setup, Main }
     private enum SetupStep { PlaceSettlement, PlaceRoad }
+
+    // Dev cards (internal)
+    private enum DevCardType { Knight, VictoryPoint, RoadBuilding, YearOfPlenty, Monopoly }
 
     [Header("Refs")]
     public BoardGenerator board;
@@ -39,43 +43,56 @@ public class BuildController : MonoBehaviour
 
     [Header("Ports (auto-assigned)")]
     public bool autoAssignPorts = true;
-    [Tooltip("How many ports to place (classic base game uses 9).")]
     public int portCount = 9;
 
-    // Setup state
+    // ===== Setup state =====
     private SetupStep setupStep = SetupStep.PlaceSettlement;
     private bool setupReverse = false;
     private Intersection lastSetupSettlement = null;
 
-    // Main state
+    // ===== Main state =====
     [SerializeField] private bool hasRolledThisTurn = false;
     [SerializeField] private bool awaitingRobberMove = false;
 
-    // Game over
+    // ===== Game Over =====
     private bool gameOver = false;
     private int winnerId = -1;
 
-    // Longest road state
+    // ===== Longest road =====
     private int longestRoadHolderId = -1;
     private int longestRoadLength = 0;
 
-    // Largest army state
+    // ===== Largest army =====
     private int largestArmyHolderId = -1;
     private int largestArmyCount = 0;
 
-    // Ports state
-    private bool portsAssigned = false;
+    // ===== Ports state =====
+    //private bool portsAssigned = false;
 
-    // ===== Player-to-player trade state (NEW) =====
-    private TradeOffer activeOffer = new TradeOffer();
+    // ===== Player-to-player trade state =====
+    private TradeOffer activeOffer = TradeOffer.None;
     private int nextOfferId = 1;
 
-    public bool HasActiveOffer => activeOffer.active;
-    public TradeOffer ActiveOffer => activeOffer;
+    // ===== Dev cards state (NEW) =====
+    private List<DevCardType> devDeck;
+    private List<DevCardType>[] devHand;
+    private List<DevCardType>[] devBoughtThisTurn; // cannot play these until next turn
+    private bool hasPlayedDevCardThisTurn = false;
+
+    // Road Building dev card
+    private int freeRoadsRemaining = 0;
+
+    // Year of Plenty / Monopoly selections (HUD can set these before calling Play…)
+    [Header("Dev Card Selections (HUD sets these)")]
+    public ResourceType yearOfPlentyChoiceA = ResourceType.Grain;
+    public ResourceType yearOfPlentyChoiceB = ResourceType.Wool;
+    public ResourceType monopolyChoice = ResourceType.Brick;
 
     public PlayerState CurrentPlayer => players[currentPlayerId];
+
     public bool HasRolledThisTurn => hasRolledThisTurn;
     public bool AwaitingRobberMove => awaitingRobberMove;
+
     public bool GameOver => gameOver;
     public int WinnerId => winnerId;
 
@@ -84,6 +101,11 @@ public class BuildController : MonoBehaviour
 
     public int LargestArmyHolderId => largestArmyHolderId;
     public int LargestArmyCount => largestArmyCount;
+
+    // ✅ GameHud expects this
+    public int DevDeckCount => devDeck?.Count ?? 0;
+
+    public TradeOffer ActiveOffer => activeOffer;
 
     private void Awake()
     {
@@ -94,6 +116,14 @@ public class BuildController : MonoBehaviour
         {
             if (players[i] == null) players[i] = new PlayerState();
             players[i].playerId = i;
+        }
+
+        devHand = new List<DevCardType>[players.Length];
+        devBoughtThisTurn = new List<DevCardType>[players.Length];
+        for (int i = 0; i < players.Length; i++)
+        {
+            devHand[i] = new List<DevCardType>();
+            devBoughtThisTurn[i] = new List<DevCardType>();
         }
     }
 
@@ -133,7 +163,13 @@ public class BuildController : MonoBehaviour
             players[i].brick = players[i].lumber = players[i].wool = players[i].grain = players[i].ore = 0;
             players[i].victoryPoints = 0;
             players[i].knightsPlayed = 0;
+
+            devHand[i].Clear();
+            devBoughtThisTurn[i].Clear();
         }
+
+        // (Re)build dev deck
+        BuildDevDeck();
 
         longestRoadHolderId = -1;
         longestRoadLength = 0;
@@ -153,6 +189,8 @@ public class BuildController : MonoBehaviour
 
         hasRolledThisTurn = false;
         awaitingRobberMove = false;
+        hasPlayedDevCardThisTurn = false;
+        freeRoadsRemaining = 0;
 
         mode = BuildMode.Settlement;
     }
@@ -164,6 +202,9 @@ public class BuildController : MonoBehaviour
 
         hasRolledThisTurn = false;
         awaitingRobberMove = false;
+
+        hasPlayedDevCardThisTurn = false;
+        freeRoadsRemaining = 0;
 
         mode = BuildMode.None;
     }
@@ -178,10 +219,7 @@ public class BuildController : MonoBehaviour
 
         if (!setupReverse)
         {
-            if (currentPlayerId == n - 1)
-            {
-                setupReverse = true;
-            }
+            if (currentPlayerId == n - 1) setupReverse = true;
             else currentPlayerId++;
         }
         else
@@ -192,13 +230,12 @@ public class BuildController : MonoBehaviour
     }
 
     // =========================
-    // ROLL / PAYOUT / TURN
+    // ROLL / TURN
     // =========================
     public void RollDiceAndDistribute()
     {
         if (gameOver) return;
         if (phase != GamePhase.Main) return;
-
         if (awaitingRobberMove) return;
         if (hasRolledThisTurn) return;
 
@@ -212,6 +249,7 @@ public class BuildController : MonoBehaviour
             HandleDiscardForSeven();
             awaitingRobberMove = true;
             mode = BuildMode.Robber;
+            Debug.Log("Rolled 7 -> discard done, move robber.");
             return;
         }
 
@@ -239,11 +277,15 @@ public class BuildController : MonoBehaviour
         if (phase != GamePhase.Main) return;
         if (awaitingRobberMove) return;
 
-        // cancel any open offer at end of turn (optional rule)
-        if (activeOffer.active) CancelOffer(currentPlayerId);
+        // clear “bought this turn” restriction for the player who is ending their turn
+        devBoughtThisTurn[currentPlayerId].Clear();
+        hasPlayedDevCardThisTurn = false;
+        freeRoadsRemaining = 0;
+
+        // Optional: cancel offer at end turn
+        if (activeOffer.active) CancelOffer(activeOffer.fromPlayerId);
 
         currentPlayerId = (currentPlayerId + 1) % players.Length;
-
         hasRolledThisTurn = false;
         awaitingRobberMove = false;
         mode = BuildMode.None;
@@ -260,7 +302,6 @@ public class BuildController : MonoBehaviour
         if (phase == GamePhase.Setup)
         {
             if (setupStep != SetupStep.PlaceSettlement) return;
-
             if (node.building != null) { RevealMarker(node); return; }
             if (node.HasNeighborBuilding()) return;
 
@@ -325,12 +366,23 @@ public class BuildController : MonoBehaviour
         bool connected = EndpointConnects(edge.A, currentPlayerId) || EndpointConnects(edge.B, currentPlayerId);
         if (!connected) return;
 
-        if (enforceBuildCosts && !CanAffordRoad(currentPlayerId)) return;
+        bool free = freeRoadsRemaining > 0;
+        if (!free && enforceBuildCosts && !CanAffordRoad(currentPlayerId)) return;
 
         edge.ownerId = currentPlayerId;
         ColorRoad(edge, CurrentPlayer.playerColor);
 
-        if (enforceBuildCosts) PayRoad(currentPlayerId);
+        if (!free && enforceBuildCosts) PayRoad(currentPlayerId);
+
+        if (freeRoadsRemaining > 0)
+        {
+            freeRoadsRemaining--;
+            if (freeRoadsRemaining == 0)
+            {
+                // done placing the 2 free roads
+                mode = BuildMode.None;
+            }
+        }
 
         RecomputeLongestRoadAndUpdateCard();
     }
@@ -341,7 +393,6 @@ public class BuildController : MonoBehaviour
         if (phase != GamePhase.Main) return;
         if (mode != BuildMode.City) return;
         if (node == null) return;
-
         if (awaitingRobberMove) return;
         if (requireRollBeforeBuild && !hasRolledThisTurn) return;
 
@@ -392,7 +443,189 @@ public class BuildController : MonoBehaviour
     }
 
     // =========================
-    // BANK TRADING + PORTS (your existing)
+    // DEV CARDS (✅ fixes your compile errors)
+    // =========================
+
+    // GameHud calls this
+    public bool CanBuyDevCard()
+    {
+        if (gameOver) return false;
+        if (phase != GamePhase.Main) return false;
+        if (awaitingRobberMove) return false;
+        if (requireRollBeforeBuild && !hasRolledThisTurn) return false;
+        if (DevDeckCount <= 0) return false;
+
+        // cost: 1 wool, 1 grain, 1 ore
+        if (enforceBuildCosts)
+            return CurrentPlayer.wool >= 1 && CurrentPlayer.grain >= 1 && CurrentPlayer.ore >= 1;
+
+        return true;
+    }
+
+    // GameHud calls this
+    public void BuyDevCard()
+    {
+        if (!CanBuyDevCard()) return;
+
+        if (enforceBuildCosts)
+        {
+            CurrentPlayer.wool -= 1;
+            CurrentPlayer.grain -= 1;
+            CurrentPlayer.ore -= 1;
+        }
+
+        var card = DrawDevCard();
+        if (card == null) return;
+
+        // VP cards: immediately add VP (simpler)
+        if (card.Value == DevCardType.VictoryPoint)
+        {
+            AddVP(currentPlayerId, 1);
+            Debug.Log("Bought VP dev card (+1 VP).");
+            return;
+        }
+
+        devHand[currentPlayerId].Add(card.Value);
+        devBoughtThisTurn[currentPlayerId].Add(card.Value);
+        Debug.Log($"Bought dev card: {card.Value}");
+    }
+
+    // GameHud calls this
+    public void PlayKnightDevCard()
+    {
+        if (!CanPlayDevCardThisTurn()) return;
+        if (!ConsumeDevCard(currentPlayerId, DevCardType.Knight)) return;
+
+        hasPlayedDevCardThisTurn = true;
+
+        // Knight effect: move robber + steal
+        players[currentPlayerId].knightsPlayed += 1;
+        RecomputeLargestArmyAndUpdateCard();
+
+        awaitingRobberMove = true;
+        mode = BuildMode.Robber;
+
+        Debug.Log("Played Knight -> move robber.");
+    }
+
+    // GameHud calls this
+    public void PlayRoadBuildingDevCard()
+    {
+        if (!CanPlayDevCardThisTurn()) return;
+        if (!ConsumeDevCard(currentPlayerId, DevCardType.RoadBuilding)) return;
+
+        hasPlayedDevCardThisTurn = true;
+
+        // place 2 roads free
+        freeRoadsRemaining = 2;
+        mode = BuildMode.Road;
+
+        Debug.Log("Played Road Building -> place 2 free roads.");
+    }
+
+    // GameHud calls this (parameterless)
+    public void PlayYearOfPlentyDevCard()
+    {
+        PlayYearOfPlentyDevCard(yearOfPlentyChoiceA, yearOfPlentyChoiceB);
+    }
+
+    // Optional overload (if you want to call with args)
+    public void PlayYearOfPlentyDevCard(ResourceType a, ResourceType b)
+    {
+        if (!CanPlayDevCardThisTurn()) return;
+        if (!ConsumeDevCard(currentPlayerId, DevCardType.YearOfPlenty)) return;
+
+        hasPlayedDevCardThisTurn = true;
+
+        if (!a.IsTradeableResource() || !b.IsTradeableResource()) return;
+
+        CurrentPlayer.AddResource(a, 1);
+        CurrentPlayer.AddResource(b, 1);
+
+        Debug.Log($"Played Year of Plenty -> +1 {a}, +1 {b}");
+    }
+
+    // GameHud calls this (parameterless)
+    public void PlayMonopolyDevCard()
+    {
+        PlayMonopolyDevCard(monopolyChoice);
+    }
+
+    public void PlayMonopolyDevCard(ResourceType type)
+    {
+        if (!CanPlayDevCardThisTurn()) return;
+        if (!ConsumeDevCard(currentPlayerId, DevCardType.Monopoly)) return;
+
+        hasPlayedDevCardThisTurn = true;
+
+        if (!type.IsTradeableResource()) return;
+
+        int totalTaken = 0;
+        for (int pid = 0; pid < players.Length; pid++)
+        {
+            if (pid == currentPlayerId) continue;
+            int have = GetResourceCount(players[pid], type);
+            if (have <= 0) continue;
+
+            SetResourceCount(players[pid], type, 0);
+            totalTaken += have;
+        }
+
+        CurrentPlayer.AddResource(type, totalTaken);
+        Debug.Log($"Played Monopoly ({type}) -> took {totalTaken}");
+    }
+
+    private bool CanPlayDevCardThisTurn()
+    {
+        if (gameOver) return false;
+        if (phase != GamePhase.Main) return false;
+        if (awaitingRobberMove) return false;
+        if (requireRollBeforeBuild && !hasRolledThisTurn) return false;
+        if (hasPlayedDevCardThisTurn) return false; // 1 dev card per turn (classic rule)
+        return true;
+    }
+
+    private bool ConsumeDevCard(int pid, DevCardType type)
+    {
+        // cannot play dev cards you bought this turn
+        if (devBoughtThisTurn[pid].Contains(type))
+        {
+            Debug.Log("Blocked: can't play a dev card the same turn you bought it.");
+            return false;
+        }
+
+        int idx = devHand[pid].IndexOf(type);
+        if (idx < 0) return false;
+
+        devHand[pid].RemoveAt(idx);
+        return true;
+    }
+
+    private void BuildDevDeck()
+    {
+        devDeck = new List<DevCardType>();
+
+        // Base game deck:
+        // Knights: 14, VP: 5, Road Building: 2, Year of Plenty: 2, Monopoly: 2
+        devDeck.AddRange(Enumerable.Repeat(DevCardType.Knight, 14));
+        devDeck.AddRange(Enumerable.Repeat(DevCardType.VictoryPoint, 5));
+        devDeck.AddRange(Enumerable.Repeat(DevCardType.RoadBuilding, 2));
+        devDeck.AddRange(Enumerable.Repeat(DevCardType.YearOfPlenty, 2));
+        devDeck.AddRange(Enumerable.Repeat(DevCardType.Monopoly, 2));
+
+        Shuffle(devDeck, new System.Random());
+    }
+
+    private DevCardType? DrawDevCard()
+    {
+        if (devDeck == null || devDeck.Count == 0) return null;
+        var c = devDeck[0];
+        devDeck.RemoveAt(0);
+        return c;
+    }
+
+    // =========================
+    // BANK TRADING + PORTS
     // =========================
     public int GetBestTradeRatio(int playerId, ResourceType give)
     {
@@ -408,10 +641,8 @@ public class BuildController : MonoBehaviour
             if (node.building.ownerId != playerId) continue;
             if (node.port == PortType.None) continue;
 
-            if (PortMatchesResource2to1(node.port, give))
-                best = Mathf.Min(best, 2);
-            else if (node.port == PortType.ThreeToOne)
-                best = Mathf.Min(best, 3);
+            if (PortMatchesResource2to1(node.port, give)) best = Mathf.Min(best, 2);
+            else if (node.port == PortType.ThreeToOne) best = Mathf.Min(best, 3);
         }
         return best;
     }
@@ -429,16 +660,14 @@ public class BuildController : MonoBehaviour
         if (give == get) return false;
 
         ratio = GetBestTradeRatio(currentPlayerId, give);
-        int have = GetResourceCount(CurrentPlayer, give);
-        return have >= ratio;
+        return GetResourceCount(CurrentPlayer, give) >= ratio;
     }
 
     public void TradeWithBank(ResourceType give, ResourceType get)
     {
         if (!CanTradeWithBank(give, get, out int ratio)) return;
 
-        int have = GetResourceCount(CurrentPlayer, give);
-        SetResourceCount(CurrentPlayer, give, have - ratio);
+        SetResourceCount(CurrentPlayer, give, GetResourceCount(CurrentPlayer, give) - ratio);
         CurrentPlayer.AddResource(get, 1);
     }
 
@@ -455,7 +684,11 @@ public class BuildController : MonoBehaviour
     public void AssignPortsRandom()
     {
         if (board == null || board.Nodes == null || board.Edges == null ||
-            board.Nodes.Count == 0 || board.Edges.Count == 0) return;
+            board.Nodes.Count == 0 || board.Edges.Count == 0)
+        {
+            Debug.LogWarning("AssignPortsRandom failed: board not ready.");
+            return;
+        }
 
         foreach (var n in board.Nodes)
             if (n != null) n.port = PortType.None;
@@ -467,7 +700,12 @@ public class BuildController : MonoBehaviour
             if (e.adjacentTiles != null && e.adjacentTiles.Count == 1)
                 boundaryEdges.Add(e);
         }
-        if (boundaryEdges.Count == 0) return;
+
+        if (boundaryEdges.Count == 0)
+        {
+            Debug.LogWarning("No boundary edges found for ports (need edge.adjacentTiles.Count==1).");
+            return;
+        }
 
         var portList = new List<PortType>
         {
@@ -482,7 +720,9 @@ public class BuildController : MonoBehaviour
         Shuffle(boundaryEdges, rng);
         Shuffle(portList, rng);
 
+        int placed = 0;
         var usedNodes = new HashSet<int>();
+
         foreach (var port in portList)
         {
             bool done = false;
@@ -497,13 +737,15 @@ public class BuildController : MonoBehaviour
                 e.B.port = port;
                 usedNodes.Add(e.A.id);
                 usedNodes.Add(e.B.id);
+                placed++;
                 done = true;
                 break;
             }
             if (!done) break;
         }
 
-        portsAssigned = true;
+        //portsAssigned = true;
+        Debug.Log($"Assigned ports: {placed}.");
     }
 
     private void Shuffle<T>(List<T> list, System.Random rng)
@@ -516,41 +758,32 @@ public class BuildController : MonoBehaviour
     }
 
     // =========================
-    // A) PLAYER-TO-PLAYER TRADING (NEW)
+    // PLAYER-TO-PLAYER OFFERS
     // =========================
-    public bool CanProposeOffer(int fromPlayerId, ResourceType giveType, int giveAmount, ResourceType getType, int getAmount)
+    public bool ProposeOffer(int toPlayerId, ResourceType giveType, int giveAmount, ResourceType getType, int getAmount)
     {
         if (gameOver) return false;
         if (phase != GamePhase.Main) return false;
         if (awaitingRobberMove) return false;
         if (requireRollBeforeBuild && !hasRolledThisTurn) return false;
 
-        if (fromPlayerId != currentPlayerId) return false; // only current turn player proposes
         if (!giveType.IsTradeableResource() || !getType.IsTradeableResource()) return false;
         if (giveType == getType) return false;
         if (giveAmount <= 0 || getAmount <= 0) return false;
 
-        return GetResourceCount(players[fromPlayerId], giveType) >= giveAmount;
-    }
-
-    public bool ProposeOffer(int toPlayerId, ResourceType giveType, int giveAmount, ResourceType getType, int getAmount)
-    {
-        if (!CanProposeOffer(currentPlayerId, giveType, giveAmount, getType, getAmount))
-            return false;
+        if (GetResourceCount(CurrentPlayer, giveType) < giveAmount) return false;
 
         activeOffer = new TradeOffer
         {
             active = true,
             offerId = nextOfferId++,
             fromPlayerId = currentPlayerId,
-            toPlayerId = toPlayerId, // -1 = any
+            toPlayerId = toPlayerId,
             giveType = giveType,
             giveAmount = giveAmount,
             getType = getType,
             getAmount = getAmount
         };
-
-        Debug.Log($"OFFER #{activeOffer.offerId}: P{activeOffer.fromPlayerId} offers {giveAmount} {giveType} for {getAmount} {getType} -> to {(toPlayerId < 0 ? "ANY" : $"P{toPlayerId}")}");
         return true;
     }
 
@@ -558,8 +791,6 @@ public class BuildController : MonoBehaviour
     {
         if (!activeOffer.active) return false;
         if (byPlayerId != activeOffer.fromPlayerId) return false;
-
-        Debug.Log($"OFFER #{activeOffer.offerId} cancelled by P{byPlayerId}");
         activeOffer = TradeOffer.None;
         return true;
     }
@@ -568,11 +799,7 @@ public class BuildController : MonoBehaviour
     {
         if (!activeOffer.active) return false;
         if (byPlayerId == activeOffer.fromPlayerId) return false;
-
-        // If targeted, only that target can decline (or anyone if open)
         if (activeOffer.toPlayerId != -1 && byPlayerId != activeOffer.toPlayerId) return false;
-
-        Debug.Log($"OFFER #{activeOffer.offerId} declined by P{byPlayerId}");
         activeOffer = TradeOffer.None;
         return true;
     }
@@ -581,25 +808,22 @@ public class BuildController : MonoBehaviour
     {
         if (!activeOffer.active) return false;
         if (byPlayerId == activeOffer.fromPlayerId) return false;
-
         if (activeOffer.toPlayerId != -1 && byPlayerId != activeOffer.toPlayerId) return false;
 
-        // verify both sides can pay
         var proposer = players[activeOffer.fromPlayerId];
         var accepter = players[byPlayerId];
 
         if (GetResourceCount(proposer, activeOffer.giveType) < activeOffer.giveAmount) return false;
         if (GetResourceCount(accepter, activeOffer.getType) < activeOffer.getAmount) return false;
 
-        // transfer proposer -> accepter
+        // proposer -> accepter
         SetResourceCount(proposer, activeOffer.giveType, GetResourceCount(proposer, activeOffer.giveType) - activeOffer.giveAmount);
         SetResourceCount(accepter, activeOffer.giveType, GetResourceCount(accepter, activeOffer.giveType) + activeOffer.giveAmount);
 
-        // transfer accepter -> proposer
+        // accepter -> proposer
         SetResourceCount(accepter, activeOffer.getType, GetResourceCount(accepter, activeOffer.getType) - activeOffer.getAmount);
         SetResourceCount(proposer, activeOffer.getType, GetResourceCount(proposer, activeOffer.getType) + activeOffer.getAmount);
 
-        Debug.Log($"OFFER #{activeOffer.offerId} accepted by P{byPlayerId}: trade completed.");
         activeOffer = TradeOffer.None;
         return true;
     }
@@ -622,6 +846,7 @@ public class BuildController : MonoBehaviour
             winnerId = pid;
             awaitingRobberMove = false;
             mode = BuildMode.None;
+            Debug.Log($"GAME OVER: P{pid} wins with {players[pid].victoryPoints} VP");
         }
     }
 
@@ -722,16 +947,14 @@ public class BuildController : MonoBehaviour
     // =========================
     private void RecomputeLongestRoadAndUpdateCard()
     {
-        if (board == null || board.Nodes == null || board.Edges == null) return;
+        if (board == null || board.Nodes == null) return;
 
-        int n = players.Length;
-        var bestPlayers = new List<int>(4);
         int bestLen = 0;
+        var bestPlayers = new List<int>();
 
-        for (int pid = 0; pid < n; pid++)
+        for (int pid = 0; pid < players.Length; pid++)
         {
             int len = ComputeLongestRoadForPlayer(pid);
-
             if (len > bestLen)
             {
                 bestLen = len;
@@ -777,23 +1000,21 @@ public class BuildController : MonoBehaviour
         foreach (var node in board.Nodes)
         {
             if (node == null) continue;
-            int len = DFSLongestFromNode(node, playerId, used);
+            int len = DFSRoad(node, playerId, used);
             if (len > best) best = len;
         }
 
         return best;
     }
 
-    private int DFSLongestFromNode(Intersection node, int playerId, HashSet<RoadEdge> used)
+    private int DFSRoad(Intersection node, int playerId, HashSet<RoadEdge> used)
     {
         if (node == null) return 0;
 
-        // Opponent building blocks continuation
-        if (node.building != null && node.building.ownerId != playerId)
-            return 0;
+        // opponent building blocks continuation
+        if (node.building != null && node.building.ownerId != playerId) return 0;
 
         int best = 0;
-
         foreach (var e in node.edges)
         {
             if (e == null) continue;
@@ -803,8 +1024,8 @@ public class BuildController : MonoBehaviour
             used.Add(e);
             var next = (e.A == node) ? e.B : e.A;
 
-            int len = 1 + DFSLongestFromNode(next, playerId, used);
-            if (len > best) best = len;
+            int len = 1 + DFSRoad(next, playerId, used);
+            best = Mathf.Max(best, len);
 
             used.Remove(e);
         }
@@ -814,19 +1035,25 @@ public class BuildController : MonoBehaviour
 
     // =========================
     // LARGEST ARMY (+2 VP)
-    // (You already increment knightsPlayed when you play Knights)
     // =========================
     private void RecomputeLargestArmyAndUpdateCard()
     {
-        int n = players.Length;
         int best = 0;
-        var bestPlayers = new List<int>(4);
+        var bestPlayers = new List<int>();
 
-        for (int pid = 0; pid < n; pid++)
+        for (int pid = 0; pid < players.Length; pid++)
         {
             int k = players[pid].knightsPlayed;
-            if (k > best) { best = k; bestPlayers.Clear(); bestPlayers.Add(pid); }
-            else if (k == best) bestPlayers.Add(pid);
+            if (k > best)
+            {
+                best = k;
+                bestPlayers.Clear();
+                bestPlayers.Add(pid);
+            }
+            else if (k == best)
+            {
+                bestPlayers.Add(pid);
+            }
         }
 
         int newHolder = -1;
@@ -864,8 +1091,8 @@ public class BuildController : MonoBehaviour
             int total = players[pid].TotalResources();
             if (total <= 7) continue;
 
-            int discardCount = total / 2;
-            for (int i = 0; i < discardCount; i++)
+            int discard = total / 2;
+            for (int i = 0; i < discard; i++)
                 TryRemoveRandomResource(pid, out _);
         }
     }
@@ -944,5 +1171,11 @@ public class BuildController : MonoBehaviour
             case ResourceType.Grain: p.grain = value; break;
             case ResourceType.Ore: p.ore = value; break;
         }
+    }
+    public void Net_SetTurnFlags(bool hasRolled, bool awaitingRobber)
+    {
+        // these fields exist in your BuildController already
+        hasRolledThisTurn = hasRolled;
+        awaitingRobberMove = awaitingRobber;
     }
 }

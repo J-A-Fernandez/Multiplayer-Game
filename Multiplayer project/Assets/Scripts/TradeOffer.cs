@@ -1,5 +1,4 @@
 using System;
-using UnityEngine;
 
 [Serializable]
 public struct TradeOffer
@@ -7,8 +6,8 @@ public struct TradeOffer
     public bool active;
     public int offerId;
 
-    public int fromPlayerId;   // proposer (must be current turn player)
-    public int toPlayerId;     // -1 = any player can accept, else specific target
+    public int fromPlayerId;   // proposer (current turn player)
+    public int toPlayerId;     // -1 = any player can accept, else specific
 
     public ResourceType giveType;
     public int giveAmount;
