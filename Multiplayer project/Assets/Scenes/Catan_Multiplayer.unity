@@ -2758,7 +2758,7 @@ MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 4038257894591255777, guid: b39ae51a8690d2f469dea4e44a07e021, type: 3}
   m_PrefabInstance: {fileID: 1139867953541210408}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
+  m_GameObject: {fileID: 1139867953541210409}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 6960e84d07fb87f47956e7a81d71c4e6, type: 3}
@@ -2775,6 +2775,10 @@ PrefabInstance:
     - target: {fileID: 1812647161560652408, guid: b39ae51a8690d2f469dea4e44a07e021, type: 3}
       propertyPath: m_Name
       value: NetworkManager
+      objectReference: {fileID: 0}
+    - target: {fileID: 4038257894591255777, guid: b39ae51a8690d2f469dea4e44a07e021, type: 3}
+      propertyPath: ConnectionData.ServerListenAddress
+      value: 0.0.0.0
       objectReference: {fileID: 0}
     - target: {fileID: 6115052856229889598, guid: b39ae51a8690d2f469dea4e44a07e021, type: 3}
       propertyPath: m_LocalPosition.x
@@ -2823,8 +2827,30 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 1812647161560652408, guid: b39ae51a8690d2f469dea4e44a07e021, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1139867953541210410}
   m_SourcePrefab: {fileID: 100100000, guid: b39ae51a8690d2f469dea4e44a07e021, type: 3}
+--- !u!1 &1139867953541210409 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 1812647161560652408, guid: b39ae51a8690d2f469dea4e44a07e021, type: 3}
+  m_PrefabInstance: {fileID: 1139867953541210408}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &1139867953541210410
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1139867953541210409}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 836f8f682f551ad4ca276ed4d00da3b6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::QuickNetUI
+  connectAddress: 127.0.0.1
+  port: 7777
 --- !u!1001 &3753823053885610781
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -2840,6 +2866,14 @@ PrefabInstance:
     - target: {fileID: 5004936883562162399, guid: 2b95f8cdc02873b43b9d0afaebed888b, type: 3}
       propertyPath: GlobalObjectIdHash
       value: 3322520500
+      objectReference: {fileID: 0}
+    - target: {fileID: 5004936883562162399, guid: 2b95f8cdc02873b43b9d0afaebed888b, type: 3}
+      propertyPath: SceneMigrationSynchronization
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5004936883562162399, guid: 2b95f8cdc02873b43b9d0afaebed888b, type: 3}
+      propertyPath: InScenePlacedSourceGlobalObjectIdHash
+      value: 103720379
       objectReference: {fileID: 0}
     - target: {fileID: 5220020832022268330, guid: 2b95f8cdc02873b43b9d0afaebed888b, type: 3}
       propertyPath: m_LocalPosition.x
