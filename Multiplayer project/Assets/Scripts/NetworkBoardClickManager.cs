@@ -28,7 +28,6 @@ public class NetworkBoardClickManager : MonoBehaviour
 
         if (!Input.GetMouseButtonDown(0)) return;
 
-        // prevent clicks through UI
         if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
             return;
 
@@ -46,7 +45,6 @@ public class NetworkBoardClickManager : MonoBehaviour
                                .Where(n => n != null)
                                .OrderBy(n => Vector2.Distance(world, n.transform.position))
                                .FirstOrDefault();
-
                 if (node != null) net.RequestPlaceSettlement(node.id);
                 break;
             }
@@ -58,7 +56,6 @@ public class NetworkBoardClickManager : MonoBehaviour
                                .Where(n => n != null)
                                .OrderBy(n => Vector2.Distance(world, n.transform.position))
                                .FirstOrDefault();
-
                 if (node != null) net.RequestUpgradeCity(node.id);
                 break;
             }
@@ -70,7 +67,6 @@ public class NetworkBoardClickManager : MonoBehaviour
                                .Where(e => e != null && e.A != null && e.B != null)
                                .OrderBy(e => Vector2.Distance(world, e.transform.position))
                                .FirstOrDefault();
-
                 if (edge != null) net.RequestPlaceRoad(edge.A.id, edge.B.id);
                 break;
             }
@@ -82,8 +78,6 @@ public class NetworkBoardClickManager : MonoBehaviour
                                .Where(t => t != null)
                                .OrderBy(t => Vector2.Distance(world, t.transform.position))
                                .FirstOrDefault();
-
-                // ✅ correct call (public method, not RPC)
                 if (tile != null) net.RequestMoveRobber(tile.coord.q, tile.coord.r);
                 break;
             }

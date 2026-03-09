@@ -76,13 +76,12 @@ public class NetworkCatanManager : NetworkBehaviour
     // ========= Server validation =========
     private bool IsTurnOwner(RpcParams rpcParams)
     {
-        // MVP: playerId == clientId (Host=0, first client=1)
+        // MVP mapping: playerId == clientId (Host=0, first client=1)
         ulong sender = rpcParams.Receive.SenderClientId;
         return (int)sender == build.currentPlayerId;
     }
 
     // ========= RPCs (Client -> Server) =========
-
     [Rpc(SendTo.Server)]
     private void SubmitPlaceSettlementServerRpc(int nodeId, RpcParams rpcParams = default)
     {
@@ -92,7 +91,6 @@ public class NetworkCatanManager : NetworkBehaviour
         var node = board.Nodes.FirstOrDefault(n => n != null && n.id == nodeId);
         if (node == null) return;
 
-        // ✅ IMPORTANT: set server mode
         var prev = build.mode;
         build.mode = BuildController.BuildMode.Settlement;
         build.TryPlaceSettlement(node);
@@ -108,7 +106,6 @@ public class NetworkCatanManager : NetworkBehaviour
         var edge = FindEdge(aId, bId);
         if (edge == null) return;
 
-        // ✅ IMPORTANT: set server mode
         var prev = build.mode;
         build.mode = BuildController.BuildMode.Road;
         build.TryPlaceRoad(edge);
@@ -124,7 +121,6 @@ public class NetworkCatanManager : NetworkBehaviour
         var node = board.Nodes.FirstOrDefault(n => n != null && n.id == nodeId);
         if (node == null) return;
 
-        // ✅ IMPORTANT: set server mode
         var prev = build.mode;
         build.mode = BuildController.BuildMode.City;
         build.TryUpgradeCity(node);
@@ -140,7 +136,6 @@ public class NetworkCatanManager : NetworkBehaviour
         var tile = board.Tiles.FirstOrDefault(t => t != null && t.coord.q == q && t.coord.r == r);
         if (tile == null) return;
 
-        // ✅ IMPORTANT: set server mode
         var prev = build.mode;
         build.mode = BuildController.BuildMode.Robber;
         build.TryMoveRobber(tile);
@@ -148,7 +143,6 @@ public class NetworkCatanManager : NetworkBehaviour
     }
 
     // ========= Snapshot Sync (Server -> Clients) =========
-
     private void SendSnapshotToClients()
     {
         if (!IsServer || build == null || board == null) return;
@@ -174,7 +168,7 @@ public class NetworkCatanManager : NetworkBehaviour
             roads.Add(e.ownerId);
         }
 
-        // ✅ tiles packed: q, r, resourceInt, number, robber(0/1)
+        // tiles packed: q, r, resourceInt, number, robber(0/1)
         var tiles = new List<int>(board.Tiles.Count * 5);
         foreach (var t in board.Tiles)
         {
@@ -233,13 +227,12 @@ public class NetworkCatanManager : NetworkBehaviour
         if (build == null || board == null) return;
         if (board.Nodes == null || board.Edges == null || board.Tiles == null) return;
 
-        // meta/turn
         build.currentPlayerId = currentPid;
         build.phase = (BuildController.GamePhase)phaseInt;
         build.Net_SetTurnFlags(hasRolled, awaitingRobber);
         build.Net_SetGameMeta(isGameOver, winnerId);
 
-        // players
+        // Players
         int nPlayers = build.players.Length;
         for (int i = 0; i < nPlayers; i++)
         {
@@ -254,7 +247,7 @@ public class NetworkCatanManager : NetworkBehaviour
             p.knightsPlayed = playerPacked[b + 6];
         }
 
-        // tiles lookup
+        // Apply tiles from host
         var tileByCoord = new Dictionary<(int q, int r), HexTile>(board.Tiles.Count);
         foreach (var t in board.Tiles)
         {
@@ -262,7 +255,6 @@ public class NetworkCatanManager : NetworkBehaviour
             tileByCoord[(t.coord.q, t.coord.r)] = t;
         }
 
-        // apply tiles
         for (int i = 0; i + 4 < tilesPacked.Length; i += 5)
         {
             int q = tilesPacked[i + 0];
@@ -282,7 +274,7 @@ public class NetworkCatanManager : NetworkBehaviour
         foreach (var t in board.Tiles)
             if (t != null) t.RefreshVisual();
 
-        // clear buildings
+        // Clear buildings
         foreach (var n in board.Nodes)
         {
             if (n == null) continue;
@@ -291,7 +283,7 @@ public class NetworkCatanManager : NetworkBehaviour
             if (marker != null) marker.gameObject.SetActive(false);
         }
 
-        // apply buildings
+        // Apply buildings
         for (int i = 0; i + 2 < buildingsPacked.Length; i += 3)
         {
             int nodeId = buildingsPacked[i];
@@ -305,7 +297,7 @@ public class NetworkCatanManager : NetworkBehaviour
             ShowMarker(node, build.players[ownerId].playerColor, isCityB ? 0.45f : 0.30f, build.markerSprite);
         }
 
-        // clear roads
+        // Clear roads
         foreach (var e in board.Edges)
         {
             if (e == null) continue;
@@ -313,7 +305,7 @@ public class NetworkCatanManager : NetworkBehaviour
             TintRoad(e, Color.white);
         }
 
-        // apply roads
+        // Apply roads
         for (int i = 0; i + 2 < roadsPacked.Length; i += 3)
         {
             int aId = roadsPacked[i];
@@ -328,7 +320,6 @@ public class NetworkCatanManager : NetworkBehaviour
         }
     }
 
-    // ---------- helpers ----------
     private RoadEdge FindEdge(int aId, int bId)
     {
         foreach (var e in board.Edges)

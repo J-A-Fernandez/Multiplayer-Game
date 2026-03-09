@@ -4,7 +4,7 @@ using UnityEngine;
 
 public class QuickNetUI : MonoBehaviour
 {
-    public string connectAddress = "127.0.0.1"; // client connects to host IP
+    public string connectAddress = "127.0.0.1";
     public ushort port = 7777;
 
     private void OnGUI()
@@ -14,8 +14,7 @@ public class QuickNetUI : MonoBehaviour
 
         var utp = nm.GetComponent<UnityTransport>();
 
-        GUILayout.BeginArea(new Rect(10, 10, 320, 220), GUI.skin.box);
-
+        GUILayout.BeginArea(new Rect(10, 10, 340, 230), GUI.skin.box);
         GUILayout.Label($"Mode: {(nm.IsHost ? "Host" : nm.IsClient ? "Client" : "Stopped")}");
         GUILayout.Space(6);
 
@@ -31,8 +30,9 @@ public class QuickNetUI : MonoBehaviour
         {
             if (GUILayout.Button("Start Host (LAN)", GUILayout.Height(30)))
             {
+                // listen on LAN (0.0.0.0) so other machines can connect
                 if (utp != null)
-                    utp.SetConnectionData("127.0.0.1", port, "0.0.0.0"); // <-- listen on LAN
+                    utp.SetConnectionData("127.0.0.1", port, "0.0.0.0");
 
                 nm.StartHost();
             }
@@ -47,6 +47,9 @@ public class QuickNetUI : MonoBehaviour
         }
         else
         {
+            GUILayout.Label($"LocalClientId: {nm.LocalClientId}");
+            if (nm.IsServer) GUILayout.Label($"Connected: {nm.ConnectedClientsList.Count}");
+
             if (GUILayout.Button("Shutdown", GUILayout.Height(30)))
                 nm.Shutdown();
         }

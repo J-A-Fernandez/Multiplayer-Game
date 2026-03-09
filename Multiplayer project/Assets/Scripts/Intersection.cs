@@ -11,7 +11,6 @@ public class Intersection : MonoBehaviour
 
     public Building building;
 
-    // Ports
     public PortType port = PortType.None;
 
     public bool IsOccupied => building != null;

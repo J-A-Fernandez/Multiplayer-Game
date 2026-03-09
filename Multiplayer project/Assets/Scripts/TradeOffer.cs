@@ -6,8 +6,8 @@ public struct TradeOffer
     public bool active;
     public int offerId;
 
-    public int fromPlayerId;   // proposer (current turn player)
-    public int toPlayerId;     // -1 = any player can accept, else specific
+    public int fromPlayerId;
+    public int toPlayerId; // -1 any
 
     public ResourceType giveType;
     public int giveAmount;
