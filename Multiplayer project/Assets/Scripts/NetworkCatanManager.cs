@@ -1,7 +1,7 @@
-using System.Collections.Generic;
+using System.Collections;
 using Unity.Netcode;
 using UnityEngine;
-
+using System.Collections.Generic;
 public class NetworkCatanManager : NetworkBehaviour
 {
     [Header("Refs")]
@@ -18,28 +18,50 @@ public class NetworkCatanManager : NetworkBehaviour
         if (build == null) build = FindFirstObjectByType<BuildController>();
     }
 
-    public override void OnNetworkSpawn()
-    {
-        if (IsServer)
-        {
-            if (mapSeed.Value == 0) mapSeed.Value = Random.Range(1, int.MaxValue);
-            GenerateBoard(mapSeed.Value);
-            build.BeginSetup();
-        }
-        else
-        {
-            if (mapSeed.Value != 0) GenerateBoard(mapSeed.Value);
-            mapSeed.OnValueChanged += (_, newSeed) => GenerateBoard(newSeed);
-            RequestFullStateServerRpc(); // late joiners get full board state
-        }
+public override void OnNetworkSpawn()
+{
+    // Auto-find references if not assigned in inspector
+    if (board == null) board = FindFirstObjectByType<BoardGenerator>();
+    if (build == null) build = FindFirstObjectByType<BuildController>();
 
-        if (IsServer)
-        {
-            // host also needs an initial sync so client-side visuals match
-            SendFullStateToClient(NetworkManager.Singleton.LocalClientId);
-        }
+    if (board == null)
+    {
+        Debug.LogError("NetworkCatanManager: BoardGenerator not found. Assign 'board' in inspector.", this);
+        return;
+    }
+    if (build == null)
+    {
+        Debug.LogError("NetworkCatanManager: BuildController not found. Assign 'build' in inspector.", this);
+        return;
     }
 
+    // Host controls state
+    if (IsServer)
+    {
+        // Make sure board is generated before using it
+        StartCoroutine(WaitThenHostInit());
+    }
+}
+private IEnumerator WaitThenHostInit()
+{
+    for (int i = 0; i < 300; i++)
+    {
+        if (board != null && board.Tiles != null && board.Nodes != null && board.Edges != null &&
+            board.Tiles.Count > 0 && board.Nodes.Count > 0 && board.Edges.Count > 0)
+        {
+            break;
+        }
+        yield return null;
+    }
+
+    if (board == null || board.Tiles == null || board.Tiles.Count == 0)
+    {
+        Debug.LogError("NetworkCatanManager: Board never became ready (Tiles empty).");
+        yield break;
+    }
+
+    // host init here...
+}
     private void GenerateBoard(int seed)
     {
         if (board == null) return;
