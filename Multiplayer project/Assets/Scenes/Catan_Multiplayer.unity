@@ -2413,13 +2413,14 @@ GameObject:
   - component: {fileID: 1770651383}
   - component: {fileID: 1770651384}
   - component: {fileID: 1770651385}
+  - component: {fileID: 1770651386}
   m_Layer: 0
   m_Name: GameManager
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &1770651383
 Transform:
   m_ObjectHideFlags: 0
@@ -2552,6 +2553,23 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BoardClickManager
   build: {fileID: 1770651384}
+  intersectionPickRadius: 0.35
+  roadPickRadius: 0.35
+  tilePickRadius: 0.6
+--- !u!114 &1770651386
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1770651382}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53a13e4d5f8b62746941ac10440e5b0b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NetworkBoardClickManager
+  build: {fileID: 1770651384}
+  net: {fileID: 3753823053885610782}
   intersectionPickRadius: 0.35
   roadPickRadius: 0.35
   tilePickRadius: 0.6
