@@ -1,57 +1,54 @@
 using Unity.Netcode;
+using Unity.Netcode.Transports.UTP;
 using UnityEngine;
 
 public class QuickNetUI : MonoBehaviour
 {
-    [Header("Client connect target")]
-    public string address = "127.0.0.1";
+    public string connectAddress = "127.0.0.1"; // client connects to host IP
     public ushort port = 7777;
 
     private void OnGUI()
     {
-        if (NetworkManager.Singleton == null) return;
+        var nm = NetworkManager.Singleton;
+        if (nm == null) return;
 
-        GUILayout.BeginArea(new Rect(10, 10, 260, 220), GUI.skin.box);
+        var utp = nm.GetComponent<UnityTransport>();
 
-        GUILayout.Label("Multiplayer");
-        GUILayout.Space(5);
+        GUILayout.BeginArea(new Rect(10, 10, 320, 220), GUI.skin.box);
 
-        GUILayout.Label("Address:");
-        address = GUILayout.TextField(address);
+        GUILayout.Label($"Mode: {(nm.IsHost ? "Host" : nm.IsClient ? "Client" : "Stopped")}");
+        GUILayout.Space(6);
+
+        GUILayout.Label("Client connect address:");
+        connectAddress = GUILayout.TextField(connectAddress);
 
         GUILayout.Label("Port:");
         ushort.TryParse(GUILayout.TextField(port.ToString()), out port);
 
-        GUILayout.Space(8);
+        GUILayout.Space(10);
 
-        if (!NetworkManager.Singleton.IsListening)
+        if (!nm.IsListening)
         {
-            if (GUILayout.Button("Start Host", GUILayout.Height(30)))
+            if (GUILayout.Button("Start Host (LAN)", GUILayout.Height(30)))
             {
-                NetworkManager.Singleton.StartHost();
+                if (utp != null)
+                    utp.SetConnectionData("127.0.0.1", port, "0.0.0.0"); // <-- listen on LAN
+
+                nm.StartHost();
             }
 
             if (GUILayout.Button("Start Client", GUILayout.Height(30)))
             {
-                // Set transport address/port before connecting
-                var utp = NetworkManager.Singleton.GetComponent<Unity.Netcode.Transports.UTP.UnityTransport>();
                 if (utp != null)
-                {
-                    utp.SetConnectionData(address, port);
-                }
-                NetworkManager.Singleton.StartClient();
+                    utp.SetConnectionData(connectAddress, port);
+
+                nm.StartClient();
             }
         }
         else
         {
-            GUILayout.Label($"Running as: " +
-                (NetworkManager.Singleton.IsHost ? "Host" :
-                 NetworkManager.Singleton.IsServer ? "Server" : "Client"));
-
             if (GUILayout.Button("Shutdown", GUILayout.Height(30)))
-            {
-                NetworkManager.Singleton.Shutdown();
-            }
+                nm.Shutdown();
         }
 
         GUILayout.EndArea();
