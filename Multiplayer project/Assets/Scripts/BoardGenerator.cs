@@ -40,23 +40,23 @@ public class BoardGenerator : MonoBehaviour
 
         ClearOld();
 
-        // ✅ FIX: Use deterministic seed when useSeed is true
+        // ✅ Deterministic RNG when useSeed is true
         var rng =
             useSeed ? new System.Random(seed) :
             useRandomSeed ? new System.Random(Environment.TickCount) :
             new System.Random(randomSeed);
 
         // 1) Coords for any radius
-        var coords = GenerateRadiusCoords(boardRadius);
+        var coords = GenerateRadiusCoords(radius: boardRadius);
         int tileCount = coords.Count;
 
-        // 2) Resources for any tileCount
+        // 2) Resources
         var resources = GenerateResources(tileCount, rng);
 
-        // 3) Number tokens for any tileCount
+        // 3) Number tokens
         var numbersBase = GenerateNumberTokens(tileCount, resources, rng);
 
-        // 4) Shuffle numbers and (optionally) avoid adjacent 6/8
+        // 4) Shuffle numbers + avoid adjacent 6/8
         List<int> finalNumbers = null;
         for (int attempt = 0; attempt < 300; attempt++)
         {
@@ -105,12 +105,15 @@ public class BoardGenerator : MonoBehaviour
         Debug.Log($"Spawned Tiles={Tiles.Count} Nodes={Nodes.Count} Edges={Edges.Count} (radius={boardRadius}) seed={seed}", this);
     }
 
-    // ✅ FIX: deterministic from seed for multiplayer
+    // ✅ Multiplayer: call this from NetworkCatanManager
     public void GenerateFromSeed(int s)
     {
         useSeed = true;
         seed = s;
-        useRandomSeed = false;   // IMPORTANT: disable tick random
+
+        // IMPORTANT: disable tick-based random
+        useRandomSeed = false;
+
         Generate();
     }
 
@@ -212,99 +215,96 @@ public class BoardGenerator : MonoBehaviour
     }
 
     private void BuildGraph()
-{
-    var nodeByPosKey = new Dictionary<Vector2Int, Intersection>();
-    var edgeByNodePair = new Dictionary<(int, int), RoadEdge>();
-
-    int nextNodeId = 0;
-    int nextEdgeId = 0; // ✅ NEW
-
-    foreach (var tile in Tiles)
     {
-        Vector2 center = tile.transform.position;
+        var nodeByPosKey = new Dictionary<Vector2Int, Intersection>();
+        var edgeByNodePair = new Dictionary<(int, int), RoadEdge>();
 
-        // Create/Get 6 corner nodes for this tile
-        for (int i = 0; i < 6; i++)
+        int nextNodeId = 0;
+        int nextEdgeId = 0; // ✅ NEW
+
+        foreach (var tile in Tiles)
         {
-            Vector2 cornerPos = center + CornerOffset(i, hexSize);
-            var key = Quantize(cornerPos, 1000f);
+            Vector2 center = tile.transform.position;
 
-            if (!nodeByPosKey.TryGetValue(key, out var node))
+            // nodes
+            for (int i = 0; i < 6; i++)
             {
-                node = Instantiate(nodePrefab, cornerPos, Quaternion.identity);
+                Vector2 cornerPos = center + CornerOffset(i, hexSize);
+                var key = Quantize(cornerPos, 1000f);
 
-                node.transform.localScale = Vector3.one;
-                node.transform.rotation = Quaternion.identity;
-
-                node.id = nextNodeId++;
-
-                // Reset state (important when regenerating)
-                node.building = null;
-                node.adjacentTiles.Clear();
-                node.edges.Clear();
-
-                nodeByPosKey[key] = node;
-                Nodes.Add(node);
-            }
-
-            tile.corners[i] = node;
-
-            if (!node.adjacentTiles.Contains(tile))
-                node.adjacentTiles.Add(tile);
-        }
-
-        // Create/Get edges around this tile
-        for (int i = 0; i < 6; i++)
-        {
-            var a = tile.corners[i];
-            var b = tile.corners[(i + 1) % 6];
-
-            int idA = a.id;
-            int idB = b.id;
-            if (idA > idB) (idA, idB) = (idB, idA);
-
-            var pairKey = (idA, idB);
-
-            if (!edgeByNodePair.TryGetValue(pairKey, out var edge))
-            {
-                Vector2 mid = (a.transform.position + b.transform.position) * 0.5f;
-
-                float angle = Mathf.Atan2(
-                    b.transform.position.y - a.transform.position.y,
-                    b.transform.position.x - a.transform.position.x
-                ) * Mathf.Rad2Deg;
-
-                edge = Instantiate(edgePrefab, mid, Quaternion.Euler(0, 0, angle));
-
-                edge.id = nextEdgeId++;     // ✅ THIS FIXES NETWORK SYNC
-                edge.ownerId = -1;          // ✅ reset owner
-
-                edge.transform.localScale = Vector3.one;
-
-                // reset adjacent tiles list (safe when reusing prefab)
-                edge.adjacentTiles.Clear();
-
-                var visual = edge.transform.Find("Visual");
-                if (visual != null)
+                if (!nodeByPosKey.TryGetValue(key, out var node))
                 {
-                    visual.localPosition = Vector3.zero;
-                    visual.localRotation = Quaternion.identity;
+                    node = Instantiate(nodePrefab, cornerPos, Quaternion.identity);
+                    node.transform.localScale = Vector3.one;
+                    node.transform.rotation = Quaternion.identity;
+
+                    node.id = nextNodeId++;
+
+                    // reset state
+                    node.building = null;
+                    node.adjacentTiles.Clear();
+                    node.edges.Clear();
+
+                    nodeByPosKey[key] = node;
+                    Nodes.Add(node);
                 }
 
-                edge.Init(a, b);
-
-                edgeByNodePair[pairKey] = edge;
-                Edges.Add(edge);
-
-                if (!a.edges.Contains(edge)) a.edges.Add(edge);
-                if (!b.edges.Contains(edge)) b.edges.Add(edge);
+                tile.corners[i] = node;
+                if (!node.adjacentTiles.Contains(tile))
+                    node.adjacentTiles.Add(tile);
             }
 
-            if (!edge.adjacentTiles.Contains(tile))
-                edge.adjacentTiles.Add(tile);
+            // edges
+            for (int i = 0; i < 6; i++)
+            {
+                var a = tile.corners[i];
+                var b = tile.corners[(i + 1) % 6];
+
+                int idA = a.id;
+                int idB = b.id;
+                if (idA > idB) (idA, idB) = (idB, idA);
+
+                var pairKey = (idA, idB);
+
+                if (!edgeByNodePair.TryGetValue(pairKey, out var edge))
+                {
+                    Vector2 mid = (a.transform.position + b.transform.position) * 0.5f;
+
+                    float angle = Mathf.Atan2(
+                        b.transform.position.y - a.transform.position.y,
+                        b.transform.position.x - a.transform.position.x
+                    ) * Mathf.Rad2Deg;
+
+                    edge = Instantiate(edgePrefab, mid, Quaternion.Euler(0, 0, angle));
+
+                    edge.id = nextEdgeId++;  // ✅ CRITICAL
+                    edge.ownerId = -1;       // ✅ reset
+
+                    edge.transform.localScale = Vector3.one;
+
+                    var visual = edge.transform.Find("Visual");
+                    if (visual != null)
+                    {
+                        visual.localPosition = Vector3.zero;
+                        visual.localRotation = Quaternion.identity;
+                    }
+
+                    edge.adjacentTiles.Clear();
+                    edge.Init(a, b);
+
+                    edgeByNodePair[pairKey] = edge;
+                    Edges.Add(edge);
+
+                    if (!a.edges.Contains(edge)) a.edges.Add(edge);
+                    if (!b.edges.Contains(edge)) b.edges.Add(edge);
+                }
+
+                if (!edge.adjacentTiles.Contains(tile))
+                    edge.adjacentTiles.Add(tile);
+            }
         }
     }
-}
+
     private Vector2 CornerOffset(int i, float size)
     {
         float angleDeg = 60f * i - 30f;
@@ -370,8 +370,8 @@ public class BoardGenerator : MonoBehaviour
 
     private void Start()
     {
-        // Singleplayer / editor convenience.
-        // Multiplayer will override by calling GenerateFromSeed(seed) from NetworkCatanManager.
-        Generate();
+        // ✅ Disabled for multiplayer scene.
+        // Singleplayer scene can call Generate() manually or re-enable this.
+        // Generate();
     }
 }

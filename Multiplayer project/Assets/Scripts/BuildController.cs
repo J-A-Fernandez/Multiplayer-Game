@@ -6,9 +6,14 @@ using UnityEngine;
 
 public class BuildController : MonoBehaviour
 {
+
+    [Header("Multiplayer")]
+    public bool autoStartSingleplayerOnly = true;
     public enum BuildMode { None, Settlement, Road, Robber, City }
     public enum GamePhase { Setup, Main }
     private enum SetupStep { PlaceSettlement, PlaceRoad }
+
+
 
     // =========================
     // DEV CARDS
@@ -149,12 +154,24 @@ public class BuildController : MonoBehaviour
 
     private void Start()
     {
-        BeginSetup();
-        BuildDevDeck();
+        // Multiplayer: NetworkCatanManager controls setup + ports.
+        // Singleplayer: BuildController can auto-start.
+        bool isMultiplayerSession = false;
 
-        if (autoAssignPorts)
-            StartCoroutine(WaitForBoardThenAssignPorts());
-    }
+    #if UNITY_NETCODE_GAMEOBJECTS
+        var nm = Unity.Netcode.NetworkManager.Singleton;
+        isMultiplayerSession = (nm != null && nm.IsListening);
+    #endif
+
+    if (autoStartSingleplayerOnly && isMultiplayerSession)
+        return;
+
+    BeginSetup();
+    BuildDevDeck();
+
+    if (autoAssignPorts)
+        StartCoroutine(WaitForBoardThenAssignPorts());
+}
 
     // =========================
     // (OPTIONAL) NETWORK HELPERS
@@ -836,12 +853,19 @@ public class BuildController : MonoBehaviour
     [ContextMenu("Assign Ports Random")]
     public void AssignPortsRandom()
     {
-        if (board == null || board.Nodes == null || board.Edges == null ||
-            board.Nodes.Count == 0 || board.Edges.Count == 0)
-        {
-            Debug.LogWarning("AssignPortsRandom failed: board not ready.");
+    // Multiplayer: only the server assigns ports
+    #if UNITY_NETCODE_GAMEOBJECTS
+        var nm = Unity.Netcode.NetworkManager.Singleton;
+        if (nm != null && nm.IsListening && !nm.IsServer)
             return;
-        }
+    #endif
+
+    if (board == null || board.Nodes == null || board.Edges == null ||
+        board.Nodes.Count == 0 || board.Edges.Count == 0)
+    {
+        Debug.LogWarning("AssignPortsRandom failed: board not ready.");
+        return;
+    }
 
         foreach (var n in board.Nodes)
             if (n != null) n.port = PortType.None;

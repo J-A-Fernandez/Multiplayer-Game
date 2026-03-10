@@ -22,11 +22,11 @@ public class NetworkBoardClickManager : MonoBehaviour
     {
         if (build == null || net == null) return;
 
-        // ✅ CLIENT-SIDE TURN LOCK: don't even send requests if it's not your turn
+        // ✅ Disable input when not your turn
         var nm = NetworkManager.Singleton;
         if (nm != null)
         {
-            int localPid = (int)nm.LocalClientId; // host=0, first client=1...
+            int localPid = (int)nm.LocalClientId; // host=0, client=1
             if (localPid != build.currentPlayerId) return;
         }
 

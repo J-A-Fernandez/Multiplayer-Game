@@ -5,7 +5,7 @@ using UnityEngine;
 
 public class NetworkCatanManager : NetworkBehaviour
 {
-    [Header("Refs (assign in Inspector)")]
+    [Header("Assign in Inspector")]
     public BoardGenerator board;
     public BuildController build;
 
@@ -16,7 +16,6 @@ public class NetworkCatanManager : NetworkBehaviour
         NetworkVariableWritePermission.Server
     );
 
-    // Lookups by deterministic ids
     private readonly Dictionary<int, Intersection> nodeById = new();
     private readonly Dictionary<int, RoadEdge> edgeById = new();
 
@@ -35,29 +34,23 @@ public class NetworkCatanManager : NetworkBehaviour
 
         if (board == null || build == null)
         {
-            Debug.LogError("NetworkCatanManager missing board/build refs. Assign them in Inspector.");
+            Debug.LogError("NetworkCatanManager: board/build missing. Assign them in inspector.");
             return;
         }
 
-        // Seed change handler
         mapSeed.OnValueChanged += (_, seed) =>
         {
             if (seed == 0) return;
             ApplySeed(seed);
-
-            // After seed applied, server sends snapshot
             if (IsServer) StartCoroutine(BroadcastSnapshotNextFrame());
         };
 
-        // Server chooses seed once
         if (IsServer && mapSeed.Value == 0)
             mapSeed.Value = UnityEngine.Random.Range(1, int.MaxValue);
 
-        // Apply immediately if already set
         if (mapSeed.Value != 0)
             ApplySeed(mapSeed.Value);
 
-        // Initial sync
         if (IsServer) StartCoroutine(BroadcastSnapshotNextFrame());
         else StartCoroutine(RequestSnapshotSoon());
     }
@@ -82,11 +75,7 @@ public class NetworkCatanManager : NetworkBehaviour
 
         if (IsServer)
         {
-            // Map players to connected clients (host=0, first client=1, etc)
-            int playerCount = Mathf.Clamp(NetworkManager.Singleton.ConnectedClientsIds.Count, 1, 4);
-            build.EnsurePlayerCount(playerCount);
-
-            // Start game once on server
+            build.EnsurePlayerCount(2);  // MVP 2 players
             build.BeginSetup();
         }
     }
@@ -103,7 +92,15 @@ public class NetworkCatanManager : NetworkBehaviour
             if (e != null) edgeById[e.id] = e;
     }
 
-    // ---------------- RPC Safety ----------------
+    // host=0 player0, client=1 player1
+    private int PlayerIdFromClientId(ulong clientId) => (int)clientId;
+
+    private bool SenderIsCurrentPlayer(ulong senderClientId)
+    {
+        int senderPid = PlayerIdFromClientId(senderClientId);
+        return senderPid == build.currentPlayerId;
+    }
+
     private bool CanSendRpc()
     {
         if (!IsSpawned) return false;
@@ -131,41 +128,12 @@ public class NetworkCatanManager : NetworkBehaviour
         RequestSnapshotServerRpc();
     }
 
-    // ---------------- Turn Authority ----------------
-    // host clientId 0 -> player 0, first client 1 -> player 1, etc.
-    private int PlayerIdFromClientId(ulong clientId) => (int)clientId;
-
-    private bool SenderIsCurrentPlayer(ulong senderClientId)
-    {
-        int senderPid = PlayerIdFromClientId(senderClientId);
-        return senderPid == build.currentPlayerId;
-    }
-
-    // =========================
-    // SERVER RPCs (client -> server)
-    // =========================
-
+    // =====================
+    // ServerRpcs
+    // =====================
     [ServerRpc(RequireOwnership = false)]
     public void RequestSnapshotServerRpc(ServerRpcParams rpc = default)
     {
-        BroadcastSnapshot();
-    }
-
-    [ServerRpc(RequireOwnership = false)]
-    public void RequestRollServerRpc(ServerRpcParams rpc = default)
-    {
-        if (!SenderIsCurrentPlayer(rpc.Receive.SenderClientId)) return;
-
-        build.RollDiceAndDistribute();
-        BroadcastSnapshot();
-    }
-
-    [ServerRpc(RequireOwnership = false)]
-    public void RequestEndTurnServerRpc(ServerRpcParams rpc = default)
-    {
-        if (!SenderIsCurrentPlayer(rpc.Receive.SenderClientId)) return;
-
-        build.EndTurn();
         BroadcastSnapshot();
     }
 
@@ -209,18 +177,17 @@ public class NetworkCatanManager : NetworkBehaviour
         BroadcastSnapshot();
     }
 
-    // =========================
-    // SNAPSHOT (server -> everyone)
-    // =========================
+    // =====================
+    // Snapshot
+    // =====================
     private void BroadcastSnapshot()
     {
         if (!CanSendRpc()) return;
 
-        // Nodes
         int nodeCount = board.Nodes.Count;
         int[] nodeIds = new int[nodeCount];
         int[] nodeOwner = new int[nodeCount];
-        byte[] nodeType = new byte[nodeCount]; // 0 none, 1 settlement, 2 city
+        byte[] nodeType = new byte[nodeCount];
 
         for (int i = 0; i < nodeCount; i++)
         {
@@ -239,7 +206,6 @@ public class NetworkCatanManager : NetworkBehaviour
             }
         }
 
-        // Edges
         int edgeCount = board.Edges.Count;
         int[] edgeIds = new int[edgeCount];
         int[] edgeOwner = new int[edgeCount];
@@ -251,7 +217,6 @@ public class NetworkCatanManager : NetworkBehaviour
             edgeOwner[i] = e != null ? e.ownerId : -1;
         }
 
-        // Robber
         int robberIndex = -1;
         for (int i = 0; i < board.Tiles.Count; i++)
         {
@@ -291,7 +256,6 @@ public class NetworkCatanManager : NetworkBehaviour
         if (build == null) build = FindFirstObjectByType<BuildController>();
         if (board == null || build == null) return;
 
-        // Ensure board exists
         if (board.Tiles.Count == 0 || board.Nodes.Count == 0 || board.Edges.Count == 0)
         {
             board.GenerateFromSeed(seed);
@@ -300,13 +264,11 @@ public class NetworkCatanManager : NetworkBehaviour
 
         RebuildLookups();
 
-        // Turn state
         build.currentPlayerId = currentPlayerId;
         build.phase = (BuildController.GamePhase)phaseInt;
         build.mode = (BuildController.BuildMode)modeInt;
         build.Net_SetTurnFlags(hasRolled, awaitingRobber);
 
-        // Robber
         for (int i = 0; i < board.Tiles.Count; i++)
         {
             if (board.Tiles[i] == null) continue;
@@ -314,7 +276,6 @@ public class NetworkCatanManager : NetworkBehaviour
             board.Tiles[i].RefreshVisual();
         }
 
-        // Buildings
         for (int i = 0; i < nodeIds.Length; i++)
         {
             int id = nodeIds[i];
@@ -337,7 +298,6 @@ public class NetworkCatanManager : NetworkBehaviour
             }
         }
 
-        // Roads
         for (int i = 0; i < edgeIds.Length; i++)
         {
             int id = edgeIds[i];
@@ -368,10 +328,13 @@ public class NetworkCatanManager : NetworkBehaviour
 
         var sr = markerT.GetComponent<SpriteRenderer>();
         if (sr == null) sr = markerT.gameObject.AddComponent<SpriteRenderer>();
-        if (sr.sprite == null && build.markerSprite != null) sr.sprite = build.markerSprite;
+
+        if (sr.sprite == null && build.markerSprite != null)
+            sr.sprite = build.markerSprite;
 
         sr.color = color;
         sr.sortingOrder = 1000;
+
         markerT.localScale = Vector3.one * size;
     }
 
