@@ -3,18 +3,28 @@ using System.Collections.Generic;
 
 public class RoadEdge : MonoBehaviour
 {
-    [Header("Endpoints")]
     public Intersection A;
     public Intersection B;
 
-    [Header("Identity / Ownership")]
-    public int id = -1;          // assigned in BoardGenerator.BuildGraph()
-    public int ownerId = -1;     // -1 means empty
+    public int id;
+    public int ownerId = -1; // -1 = empty
 
-    [Header("Adjacency")]
     public readonly List<HexTile> adjacentTiles = new();
 
+    [Header("Visual")]
+    [SerializeField] private SpriteRenderer visualSR;
+
     public bool IsOccupied => ownerId >= 0;
+
+    private void Awake()
+    {
+        // Find child "Visual" SpriteRenderer if not assigned
+        if (visualSR == null)
+        {
+            var visualT = transform.Find("Visual");
+            if (visualT != null) visualSR = visualT.GetComponent<SpriteRenderer>();
+        }
+    }
 
     public void Init(Intersection a, Intersection b)
     {
@@ -22,22 +32,25 @@ public class RoadEdge : MonoBehaviour
         B = b;
     }
 
-    /// <summary>
-    /// Call this when generating a new board to ensure no stale state remains.
-    /// </summary>
-    public void ResetState()
+    public void ApplyOwnerVisual(int newOwnerId, Color roadColor)
     {
-        ownerId = -1;
-        adjacentTiles.Clear();
-        // keep id as-is (it will be overwritten by generator when instantiating)
+        ownerId = newOwnerId;
+        if (visualSR != null && ownerId >= 0)
+        {
+            visualSR.color = roadColor;
+            visualSR.sortingLayerName = "Default";
+            visualSR.sortingOrder = 500;
+        }
     }
 
-#if UNITY_EDITOR
-    private void OnDrawGizmosSelected()
+    public void ClearOwnerVisual()
     {
-        if (A == null || B == null) return;
-        Gizmos.color = Color.cyan;
-        Gizmos.DrawLine(A.transform.position, B.transform.position);
+        ownerId = -1;
+        if (visualSR != null)
+        {
+            visualSR.color = Color.white;
+            visualSR.sortingLayerName = "Default";
+            visualSR.sortingOrder = 500;
+        }
     }
-#endif
 }
