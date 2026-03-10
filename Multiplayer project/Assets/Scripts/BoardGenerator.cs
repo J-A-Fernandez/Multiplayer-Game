@@ -212,92 +212,99 @@ public class BoardGenerator : MonoBehaviour
     }
 
     private void BuildGraph()
+{
+    var nodeByPosKey = new Dictionary<Vector2Int, Intersection>();
+    var edgeByNodePair = new Dictionary<(int, int), RoadEdge>();
+
+    int nextNodeId = 0;
+    int nextEdgeId = 0; // ✅ NEW
+
+    foreach (var tile in Tiles)
     {
-        var nodeByPosKey = new Dictionary<Vector2Int, Intersection>();
-        var edgeByNodePair = new Dictionary<(int, int), RoadEdge>();
+        Vector2 center = tile.transform.position;
 
-        int nextNodeId = 0;
-        int nextEdgeId = 0; // ✅ FIX: stable edge ids
-
-        foreach (var tile in Tiles)
+        // Create/Get 6 corner nodes for this tile
+        for (int i = 0; i < 6; i++)
         {
-            Vector2 center = tile.transform.position;
+            Vector2 cornerPos = center + CornerOffset(i, hexSize);
+            var key = Quantize(cornerPos, 1000f);
 
-            // Create/Get 6 corner nodes for this tile
-            for (int i = 0; i < 6; i++)
+            if (!nodeByPosKey.TryGetValue(key, out var node))
             {
-                Vector2 cornerPos = center + CornerOffset(i, hexSize);
-                var key = Quantize(cornerPos, 1000f);
+                node = Instantiate(nodePrefab, cornerPos, Quaternion.identity);
 
-                if (!nodeByPosKey.TryGetValue(key, out var node))
-                {
-                    node = Instantiate(nodePrefab, cornerPos, Quaternion.identity);
-                    node.transform.localScale = Vector3.one;
-                    node.transform.rotation = Quaternion.identity;
+                node.transform.localScale = Vector3.one;
+                node.transform.rotation = Quaternion.identity;
 
-                    node.id = nextNodeId++;
+                node.id = nextNodeId++;
 
-                    // reset state to be safe
-                    node.building = null;
-                    node.adjacentTiles.Clear();
-                    node.edges.Clear();
+                // Reset state (important when regenerating)
+                node.building = null;
+                node.adjacentTiles.Clear();
+                node.edges.Clear();
 
-                    nodeByPosKey[key] = node;
-                    Nodes.Add(node);
-                }
-
-                tile.corners[i] = node;
-                if (!node.adjacentTiles.Contains(tile))
-                    node.adjacentTiles.Add(tile);
+                nodeByPosKey[key] = node;
+                Nodes.Add(node);
             }
 
-            // Create/Get edges around this tile
-            for (int i = 0; i < 6; i++)
+            tile.corners[i] = node;
+
+            if (!node.adjacentTiles.Contains(tile))
+                node.adjacentTiles.Add(tile);
+        }
+
+        // Create/Get edges around this tile
+        for (int i = 0; i < 6; i++)
+        {
+            var a = tile.corners[i];
+            var b = tile.corners[(i + 1) % 6];
+
+            int idA = a.id;
+            int idB = b.id;
+            if (idA > idB) (idA, idB) = (idB, idA);
+
+            var pairKey = (idA, idB);
+
+            if (!edgeByNodePair.TryGetValue(pairKey, out var edge))
             {
-                var a = tile.corners[i];
-                var b = tile.corners[(i + 1) % 6];
+                Vector2 mid = (a.transform.position + b.transform.position) * 0.5f;
 
-                int idA = a.id;
-                int idB = b.id;
-                if (idA > idB) (idA, idB) = (idB, idA);
+                float angle = Mathf.Atan2(
+                    b.transform.position.y - a.transform.position.y,
+                    b.transform.position.x - a.transform.position.x
+                ) * Mathf.Rad2Deg;
 
-                var pairKey = (idA, idB);
+                edge = Instantiate(edgePrefab, mid, Quaternion.Euler(0, 0, angle));
 
-                if (!edgeByNodePair.TryGetValue(pairKey, out var edge))
+                edge.id = nextEdgeId++;     // ✅ THIS FIXES NETWORK SYNC
+                edge.ownerId = -1;          // ✅ reset owner
+
+                edge.transform.localScale = Vector3.one;
+
+                // reset adjacent tiles list (safe when reusing prefab)
+                edge.adjacentTiles.Clear();
+
+                var visual = edge.transform.Find("Visual");
+                if (visual != null)
                 {
-                    Vector2 mid = (a.transform.position + b.transform.position) * 0.5f;
-
-                    float angle = Mathf.Atan2(
-                        b.transform.position.y - a.transform.position.y,
-                        b.transform.position.x - a.transform.position.x
-                    ) * Mathf.Rad2Deg;
-
-                    edge = Instantiate(edgePrefab, mid, Quaternion.Euler(0, 0, angle));
-                    edge.id = nextEdgeId++; // ✅ FIX: assign stable id
-                    edge.transform.localScale = Vector3.one;
-
-                    var visual = edge.transform.Find("Visual");
-                    if (visual != null)
-                    {
-                        visual.localPosition = Vector3.zero;
-                        visual.localRotation = Quaternion.identity;
-                    }
-
-                    edge.Init(a, b);
-
-                    edgeByNodePair[pairKey] = edge;
-                    Edges.Add(edge);
-
-                    if (!a.edges.Contains(edge)) a.edges.Add(edge);
-                    if (!b.edges.Contains(edge)) b.edges.Add(edge);
+                    visual.localPosition = Vector3.zero;
+                    visual.localRotation = Quaternion.identity;
                 }
 
-                if (!edge.adjacentTiles.Contains(tile))
-                    edge.adjacentTiles.Add(tile);
+                edge.Init(a, b);
+
+                edgeByNodePair[pairKey] = edge;
+                Edges.Add(edge);
+
+                if (!a.edges.Contains(edge)) a.edges.Add(edge);
+                if (!b.edges.Contains(edge)) b.edges.Add(edge);
             }
+
+            if (!edge.adjacentTiles.Contains(tile))
+                edge.adjacentTiles.Add(tile);
         }
     }
-
+}
     private Vector2 CornerOffset(int i, float size)
     {
         float angleDeg = 60f * i - 30f;
