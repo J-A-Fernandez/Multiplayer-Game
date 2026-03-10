@@ -393,6 +393,52 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 146272271}
   m_CullTransparentMesh: 1
+--- !u!1 &182299719
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 182299721}
+  - component: {fileID: 182299720}
+  m_Layer: 0
+  m_Name: UIRoot
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &182299720
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 182299719}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 836f8f682f551ad4ca276ed4d00da3b6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::QuickNetUI
+  hostIp: 192.168.1.23
+  port: 7777
+--- !u!4 &182299721
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 182299719}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 892.14746, y: 531.848, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &375665101
 GameObject:
   m_ObjectHideFlags: 0
@@ -776,6 +822,8 @@ MonoBehaviour:
   hexPrefab: {fileID: 402484258770135703, guid: 6ed37f419460a4220ab0339e3d5fca2a, type: 3}
   nodePrefab: {fileID: 4421641089767940882, guid: 64f0c3d5cfdbeb649a83dd5a273ef72b, type: 3}
   edgePrefab: {fileID: 7142226221898551561, guid: b5b1c605dd011344b942147d742c387c, type: 3}
+  useSeed: 1
+  seed: 12345
   randomSeed: 0
   useRandomSeed: 1
   avoidAdjacentSixEight: 1
@@ -2443,13 +2491,12 @@ MonoBehaviour:
   requireRollBeforeBuild: 1
   enforceBuildCosts: 1
   targetVictoryPoints: 10
-  hasRolledThisTurn: 0
-  awaitingRobberMove: 0
-  gameOver: 0
-  winnerId: -1
-  yearOfPlentyChoiceA: 3
-  yearOfPlentyChoiceB: 2
-  monopolyChoice: 0
+  longestRoadMinLength: 5
+  longestRoadBonusVP: 2
+  largestArmyMinKnights: 3
+  largestArmyBonusVP: 2
+  autoAssignPorts: 1
+  portCount: 9
 --- !u!114 &1770651385
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2713,36 +2760,17 @@ MonoBehaviour:
   m_ChildScaleWidth: 0
   m_ChildScaleHeight: 0
   m_ReverseArrangement: 0
---- !u!1 &2019155850 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 1812647161560652408, guid: b39ae51a8690d2f469dea4e44a07e021, type: 3}
-  m_PrefabInstance: {fileID: 1139867953541210408}
-  m_PrefabAsset: {fileID: 0}
 --- !u!114 &2085906680 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 4038257894591255777, guid: b39ae51a8690d2f469dea4e44a07e021, type: 3}
   m_PrefabInstance: {fileID: 1139867953541210408}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2019155850}
+  m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 6960e84d07fb87f47956e7a81d71c4e6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.Transports.UTP.UnityTransport
---- !u!114 &2085906681
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2019155850}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 836f8f682f551ad4ca276ed4d00da3b6, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::QuickNetUI
-  connectAddress: 127.0.0.1
-  port: 7777
 --- !u!1001 &1139867953541210408
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -2806,10 +2834,7 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents:
-    - targetCorrespondingSourceObject: {fileID: 1812647161560652408, guid: b39ae51a8690d2f469dea4e44a07e021, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 2085906681}
+    m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: b39ae51a8690d2f469dea4e44a07e021, type: 3}
 --- !u!1001 &3753823053885610781
 PrefabInstance:
@@ -3194,3 +3219,4 @@ SceneRoots:
   - {fileID: 1564466315}
   - {fileID: 3753823053885610781}
   - {fileID: 1139867953541210408}
+  - {fileID: 182299721}

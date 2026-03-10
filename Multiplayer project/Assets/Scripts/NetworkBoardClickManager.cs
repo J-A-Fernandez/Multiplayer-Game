@@ -26,7 +26,6 @@ public class NetworkBoardClickManager : MonoBehaviour
             return;
 
         Vector2 world = Camera.main.ScreenToWorldPoint(Input.mousePosition);
-
         var clickMode = build.mode;
 
         if (clickMode == BuildController.BuildMode.Settlement)
@@ -37,7 +36,9 @@ public class NetworkBoardClickManager : MonoBehaviour
                            .OrderBy(n => Vector2.Distance(world, n.transform.position))
                            .FirstOrDefault();
 
-            if (node != null) net.RequestPlaceSettlementServerRpc(node.id);
+            if (node != null)
+                net.RequestPlaceSettlementServerRpc(node.id);
+
             return;
         }
 
@@ -49,7 +50,9 @@ public class NetworkBoardClickManager : MonoBehaviour
                            .OrderBy(e => Vector2.Distance(world, e.transform.position))
                            .FirstOrDefault();
 
-            if (edge != null) net.RequestPlaceRoadServerRpc(edge.id);
+            if (edge != null)
+                net.RequestPlaceRoadServerRpc(edge.id);
+
             return;
         }
 
@@ -63,8 +66,9 @@ public class NetworkBoardClickManager : MonoBehaviour
 
             if (tile != null && build.board != null)
             {
-                int tileIndex = build.board.Tiles.IndexOf(tile);
-                if (tileIndex >= 0) net.RequestMoveRobberServerRpc(tileIndex);
+                int idx = build.board.Tiles.IndexOf(tile);
+                if (idx >= 0)
+                    net.RequestMoveRobberServerRpc(idx);
             }
             return;
         }
@@ -77,7 +81,9 @@ public class NetworkBoardClickManager : MonoBehaviour
                            .OrderBy(n => Vector2.Distance(world, n.transform.position))
                            .FirstOrDefault();
 
-            if (node != null) net.RequestUpgradeCityServerRpc(node.id);
+            if (node != null)
+                net.RequestUpgradeCityServerRpc(node.id);
+
             return;
         }
     }
