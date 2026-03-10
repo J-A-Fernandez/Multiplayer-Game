@@ -1,9 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Unity.VisualScripting;
 using UnityEngine;
-using UnityEngine.Tilemaps;
 
 public class BoardGenerator : MonoBehaviour
 {
@@ -15,8 +13,11 @@ public class BoardGenerator : MonoBehaviour
     public HexTile hexPrefab;
     public Intersection nodePrefab;
     public RoadEdge edgePrefab;
+
+    [Header("Seed / Determinism")]
     public bool useSeed = true;
     public int seed = 12345;
+
     [Header("Randomization")]
     public int randomSeed = 0;
     public bool useRandomSeed = true;
@@ -31,7 +32,6 @@ public class BoardGenerator : MonoBehaviour
     [ContextMenu("Generate Board")]
     public void Generate()
     {
-        // Prefab checks
         if (hexPrefab == null || nodePrefab == null || edgePrefab == null)
         {
             Debug.LogError($"Missing prefab refs! hex={hexPrefab} node={nodePrefab} edge={edgePrefab}", this);
@@ -40,18 +40,20 @@ public class BoardGenerator : MonoBehaviour
 
         ClearOld();
 
-        var rng = useRandomSeed
-            ? new System.Random(Environment.TickCount)
-            : new System.Random(randomSeed);
+        // ✅ FIX: Use deterministic seed when useSeed is true
+        var rng =
+            useSeed ? new System.Random(seed) :
+            useRandomSeed ? new System.Random(Environment.TickCount) :
+            new System.Random(randomSeed);
 
         // 1) Coords for any radius
-        var coords = GenerateRadiusCoords(radius: boardRadius);
+        var coords = GenerateRadiusCoords(boardRadius);
         int tileCount = coords.Count;
 
         // 2) Resources for any tileCount
         var resources = GenerateResources(tileCount, rng);
 
-        // 3) Number tokens for any tileCount (one per non-desert tile)
+        // 3) Number tokens for any tileCount
         var numbersBase = GenerateNumberTokens(tileCount, resources, rng);
 
         // 4) Shuffle numbers and (optionally) avoid adjacent 6/8
@@ -76,15 +78,10 @@ public class BoardGenerator : MonoBehaviour
             var coord = coords[i];
             var res = resources[i];
 
-            var tile = Instantiate(
-                hexPrefab,
-                coord.ToWorld(hexSize),
-                Quaternion.identity
-
-            );
-
+            var tile = Instantiate(hexPrefab, coord.ToWorld(hexSize), Quaternion.identity);
             tile.coord = coord;
             tile.resource = res;
+
             if (res == ResourceType.Desert)
             {
                 tile.number = 0;
@@ -96,7 +93,6 @@ public class BoardGenerator : MonoBehaviour
                 tile.hasRobber = false;
             }
 
-
             tile.RefreshVisual();
 
             Tiles.Add(tile);
@@ -106,22 +102,23 @@ public class BoardGenerator : MonoBehaviour
         // 6) Build graph (nodes + edges)
         BuildGraph();
 
-        Debug.Log($"Spawned Tiles={Tiles.Count} Nodes={Nodes.Count} Edges={Edges.Count} (radius={boardRadius})", this);
+        Debug.Log($"Spawned Tiles={Tiles.Count} Nodes={Nodes.Count} Edges={Edges.Count} (radius={boardRadius}) seed={seed}", this);
     }
+
+    // ✅ FIX: deterministic from seed for multiplayer
     public void GenerateFromSeed(int s)
-{
-    useSeed = true;
-    seed = s;
-    Generate();
-}
+    {
+        useSeed = true;
+        seed = s;
+        useRandomSeed = false;   // IMPORTANT: disable tick random
+        Generate();
+    }
+
     private List<ResourceType> GenerateResources(int tileCount, System.Random rng)
     {
-        // About 1 desert per 19 tiles (19->1, 37->2, 61->3)
         int desertCount = Mathf.Max(1, Mathf.RoundToInt(tileCount / 19f));
         int nonDesert = tileCount - desertCount;
 
-        // Classic Catan ratios over 18 non-desert tiles:
-        // Lumber 4, Wool 4, Grain 4, Brick 3, Ore 3
         float rLumber = 4f / 18f;
         float rWool = 4f / 18f;
         float rGrain = 4f / 18f;
@@ -134,10 +131,9 @@ public class BoardGenerator : MonoBehaviour
         int brick = Mathf.RoundToInt(nonDesert * rBrick);
         int ore = Mathf.RoundToInt(nonDesert * rOre);
 
-        // Fix rounding to match exactly
         int sum = lumber + wool + grain + brick + ore;
-        while (sum < nonDesert) { lumber++; sum++; }                 // add extras
-        while (sum > nonDesert && lumber > 0) { lumber--; sum--; }   // remove if overshot
+        while (sum < nonDesert) { lumber++; sum++; }
+        while (sum > nonDesert && lumber > 0) { lumber--; sum--; }
 
         var list = new List<ResourceType>(tileCount);
         list.AddRange(Enumerable.Repeat(ResourceType.Desert, desertCount));
@@ -147,7 +143,6 @@ public class BoardGenerator : MonoBehaviour
         list.AddRange(Enumerable.Repeat(ResourceType.Brick, brick));
         list.AddRange(Enumerable.Repeat(ResourceType.Ore, ore));
 
-        // Safety: ensure exact size
         while (list.Count < tileCount) list.Add(ResourceType.Lumber);
         if (list.Count > tileCount) list.RemoveRange(tileCount, list.Count - tileCount);
 
@@ -157,27 +152,23 @@ public class BoardGenerator : MonoBehaviour
 
     private List<int> GenerateNumberTokens(int tileCount, List<ResourceType> resources, System.Random rng)
     {
-        // One number per non-desert tile
         int nonDesert = resources.Count(r => r != ResourceType.Desert);
 
-        // Classic counts for 18 tokens
         var baseCounts = new Dictionary<int, int>
-    {
-        {2,1},{3,2},{4,2},{5,2},{6,2},{8,2},{9,2},{10,2},{11,2},{12,1}
-    };
+        {
+            {2,1},{3,2},{4,2},{5,2},{6,2},{8,2},{9,2},{10,2},{11,2},{12,1}
+        };
 
         float scale = nonDesert / 18f;
 
-        // Scale each count
         var counts = baseCounts.ToDictionary(
             kv => kv.Key,
             kv => Mathf.Max(0, Mathf.RoundToInt(kv.Value * scale))
         );
 
         int total = counts.Values.Sum();
+        int[] adjustOrder = { 6, 8, 5, 9, 4, 10, 3, 11, 2, 12 };
 
-        // Adjust to match exactly
-        int[] adjustOrder = { 6, 8, 5, 9, 4, 10, 3, 11, 2, 12 }; // keep good probabilities
         while (total < nonDesert)
         {
             foreach (var n in adjustOrder)
@@ -186,6 +177,7 @@ public class BoardGenerator : MonoBehaviour
                 counts[n]++; total++;
             }
         }
+
         while (total > nonDesert)
         {
             foreach (var n in adjustOrder)
@@ -199,13 +191,13 @@ public class BoardGenerator : MonoBehaviour
         foreach (var kv in counts)
             tokens.AddRange(Enumerable.Repeat(kv.Key, kv.Value));
 
-        // Safety: exact size
         while (tokens.Count < nonDesert) tokens.Add(6);
         if (tokens.Count > nonDesert) tokens.RemoveRange(nonDesert, tokens.Count - nonDesert);
 
         Shuffle(tokens, rng);
         return tokens;
     }
+
     private List<AxialCoord> GenerateRadiusCoords(int radius)
     {
         var list = new List<AxialCoord>();
@@ -225,6 +217,7 @@ public class BoardGenerator : MonoBehaviour
         var edgeByNodePair = new Dictionary<(int, int), RoadEdge>();
 
         int nextNodeId = 0;
+        int nextEdgeId = 0; // ✅ FIX: stable edge ids
 
         foreach (var tile in Tiles)
         {
@@ -234,18 +227,17 @@ public class BoardGenerator : MonoBehaviour
             for (int i = 0; i < 6; i++)
             {
                 Vector2 cornerPos = center + CornerOffset(i, hexSize);
-                var key = Quantize(cornerPos, 1000f); // positional merge tolerance
+                var key = Quantize(cornerPos, 1000f);
 
                 if (!nodeByPosKey.TryGetValue(key, out var node))
                 {
                     node = Instantiate(nodePrefab, cornerPos, Quaternion.identity);
-
                     node.transform.localScale = Vector3.one;
                     node.transform.rotation = Quaternion.identity;
 
                     node.id = nextNodeId++;
 
-                    // ? Reset state (important)
+                    // reset state to be safe
                     node.building = null;
                     node.adjacentTiles.Clear();
                     node.edges.Clear();
@@ -255,7 +247,6 @@ public class BoardGenerator : MonoBehaviour
                 }
 
                 tile.corners[i] = node;
-
                 if (!node.adjacentTiles.Contains(tile))
                     node.adjacentTiles.Add(tile);
             }
@@ -282,7 +273,7 @@ public class BoardGenerator : MonoBehaviour
                     ) * Mathf.Rad2Deg;
 
                     edge = Instantiate(edgePrefab, mid, Quaternion.Euler(0, 0, angle));
-
+                    edge.id = nextEdgeId++; // ✅ FIX: assign stable id
                     edge.transform.localScale = Vector3.one;
 
                     var visual = edge.transform.Find("Visual");
@@ -307,7 +298,6 @@ public class BoardGenerator : MonoBehaviour
         }
     }
 
-    // Pointy-top hex corners: angle = 60*i - 30 degrees
     private Vector2 CornerOffset(int i, float size)
     {
         float angleDeg = 60f * i - 30f;
@@ -346,7 +336,6 @@ public class BoardGenerator : MonoBehaviour
 
     private bool NumbersPassAdjacencyRule(List<AxialCoord> coords, List<ResourceType> resources, List<int> numbers)
     {
-        // Build a temp map: coord -> number (0 for desert)
         var temp = new Dictionary<AxialCoord, int>();
         int idx = 0;
         for (int i = 0; i < coords.Count; i++)
@@ -360,7 +349,6 @@ public class BoardGenerator : MonoBehaviour
             int num = kv.Value;
             if (num != 6 && num != 8) continue;
 
-            // ensure none of 6 neighbors is also 6/8
             for (int d = 0; d < 6; d++)
             {
                 var n = kv.Key.Neighbor(d);
@@ -375,8 +363,8 @@ public class BoardGenerator : MonoBehaviour
 
     private void Start()
     {
-        Debug.Log("BoardGenerator Start -> Generate()", this);
+        // Singleplayer / editor convenience.
+        // Multiplayer will override by calling GenerateFromSeed(seed) from NetworkCatanManager.
         Generate();
     }
-
 }
