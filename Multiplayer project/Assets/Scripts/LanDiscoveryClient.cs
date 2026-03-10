@@ -37,7 +37,6 @@ public class LanDiscoveryClient : MonoBehaviour
             udp.EnableBroadcast = true;
             udp.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
             udp.Client.Bind(anyEP);
-            udp.Client.ReceiveTimeout = 0; // non-blocking via Available + Receive
         }
         catch (Exception e)
         {
@@ -56,7 +55,7 @@ public class LanDiscoveryClient : MonoBehaviour
     {
         if (udp == null) return;
 
-        // Read all available packets this frame
+        // Receive all packets available this frame
         while (udp.Available > 0)
         {
             try
@@ -65,7 +64,7 @@ public class LanDiscoveryClient : MonoBehaviour
                 byte[] data = udp.Receive(ref sender);
                 string msg = Encoding.UTF8.GetString(data);
 
-                // Expected: CATAN|room|port
+                // CATAN|room|port
                 if (!msg.StartsWith("CATAN|")) continue;
 
                 string[] parts = msg.Split('|');
@@ -75,6 +74,11 @@ public class LanDiscoveryClient : MonoBehaviour
                 if (!ushort.TryParse(parts[2], out ushort gamePort)) continue;
 
                 string ip = sender.Address.ToString();
+
+                // ✅ filter bad/unusable addresses
+                if (string.IsNullOrEmpty(ip)) continue;
+                if (ip == "127.0.0.1" || ip == "::1") continue;
+                if (ip.StartsWith("fe80:")) continue; // ignore IPv6 link-local
 
                 Upsert(room, ip, gamePort);
             }
@@ -97,7 +101,6 @@ public class LanDiscoveryClient : MonoBehaviour
     {
         float now = Time.unscaledTime;
 
-        // Update existing by same IP+port
         for (int i = 0; i < sessions.Count; i++)
         {
             if (sessions[i].ip == ip && sessions[i].gamePort == port)

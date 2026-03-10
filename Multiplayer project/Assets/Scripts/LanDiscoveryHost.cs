@@ -10,8 +10,8 @@ public class LanDiscoveryHost : MonoBehaviour
     public string roomName = "Catan Room";
 
     [Header("Ports")]
-    public int discoveryPort = 47777;  // UDP broadcast port
-    public ushort gamePort = 7777;     // Netcode/UTP port
+    public int discoveryPort = 47777;
+    public ushort gamePort = 7777;
 
     [Header("Broadcast")]
     public float broadcastInterval = 1.0f;
@@ -48,7 +48,6 @@ public class LanDiscoveryHost : MonoBehaviour
         if (t < broadcastInterval) return;
         t = 0f;
 
-        // Simple message format: CATAN|<roomName>|<gamePort>
         string msg = $"CATAN|{roomName}|{gamePort}";
         byte[] data = Encoding.UTF8.GetBytes(msg);
 
@@ -58,7 +57,7 @@ public class LanDiscoveryHost : MonoBehaviour
         }
         catch
         {
-            // ignore transient network errors
+            // ignore transient errors
         }
     }
 }
