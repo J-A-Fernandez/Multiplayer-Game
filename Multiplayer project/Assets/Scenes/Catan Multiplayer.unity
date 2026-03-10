@@ -422,8 +422,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 836f8f682f551ad4ca276ed4d00da3b6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::QuickNetUI
-  address: 127.0.0.1
-  port: 7777
+  roomName: Catan Room
+  gamePort: 7777
+  discoveryClient: {fileID: 0}
+  discoveryHost: {fileID: 0}
 --- !u!4 &182299721
 Transform:
   m_ObjectHideFlags: 0
@@ -1205,7 +1207,19 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 865511231}
   m_OnClick:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 712194195}
+        m_TargetAssemblyTypeName: NetworkCatanManager, Assembly-CSharp
+        m_MethodName: UI_Roll
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
 --- !u!114 &865511231
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1326,7 +1340,19 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 891056253}
   m_OnClick:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 712194195}
+        m_TargetAssemblyTypeName: NetworkCatanManager, Assembly-CSharp
+        m_MethodName: UI_EndTurn
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
 --- !u!114 &891056253
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1365,6 +1391,69 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 891056250}
   m_CullTransparentMesh: 1
+--- !u!1 &958536484
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 958536487}
+  - component: {fileID: 958536486}
+  - component: {fileID: 958536485}
+  m_Layer: 0
+  m_Name: LanDiscovery
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &958536485
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 958536484}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ccd679146b8e44a29b2f3619da92fe64, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::LanDiscoveryHost
+  roomName: Catan Room
+  discoveryPort: 47777
+  gamePort: 7777
+  broadcastInterval: 1
+--- !u!114 &958536486
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 958536484}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 60b56b62b1325471ca6c20360037b579, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::LanDiscoveryClient
+  discoveryPort: 47777
+  sessionTimeoutSeconds: 3
+--- !u!4 &958536487
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 958536484}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 842.05817, y: 537.6328, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &984286683
 GameObject:
   m_ObjectHideFlags: 0
@@ -2521,6 +2610,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8676bbe3d597a7b49a59b140d5fe1cea, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BuildController
+  autoStartSingleplayerOnly: 1
   board: {fileID: 520611209}
   markerSprite: {fileID: -2413806693520163455, guid: a605e16c574a8744ea2881313acf28fa, type: 3}
   players:
@@ -2579,7 +2669,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1770651382}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 53a13e4d5f8b62746941ac10440e5b0b, type: 3}
   m_Name: 
@@ -3347,3 +3437,4 @@ SceneRoots:
   - {fileID: 182299721}
   - {fileID: 712194194}
   - {fileID: 1774652990}
+  - {fileID: 958536487}
