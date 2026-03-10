@@ -15,7 +15,8 @@ public class BoardGenerator : MonoBehaviour
     public HexTile hexPrefab;
     public Intersection nodePrefab;
     public RoadEdge edgePrefab;
-
+    public bool useSeed = true;
+    public int seed = 12345;
     [Header("Randomization")]
     public int randomSeed = 0;
     public bool useRandomSeed = true;
@@ -107,6 +108,12 @@ public class BoardGenerator : MonoBehaviour
 
         Debug.Log($"Spawned Tiles={Tiles.Count} Nodes={Nodes.Count} Edges={Edges.Count} (radius={boardRadius})", this);
     }
+    public void GenerateFromSeed(int s)
+{
+    useSeed = true;
+    seed = s;
+    Generate();
+}
     private List<ResourceType> GenerateResources(int tileCount, System.Random rng)
     {
         // About 1 desert per 19 tiles (19->1, 37->2, 61->3)

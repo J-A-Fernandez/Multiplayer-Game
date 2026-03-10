@@ -4,11 +4,9 @@ using UnityEngine.EventSystems;
 
 public class NetworkBoardClickManager : MonoBehaviour
 {
-    [Header("Refs")]
-    public BuildController build;           // local build controller (for current mode, radii, etc.)
-    public NetworkCatanManager net;         // sends requests to host
+    public BuildController build;
+    public NetworkCatanManager net;
 
-    [Header("Pick Radii")]
     public float intersectionPickRadius = 0.35f;
     public float roadPickRadius = 0.35f;
     public float tilePickRadius = 0.60f;
@@ -24,7 +22,7 @@ public class NetworkBoardClickManager : MonoBehaviour
         if (build == null || net == null) return;
         if (!Input.GetMouseButtonDown(0)) return;
 
-        // Block clicks through UI
+        // prevent clicks through UI
         if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
             return;
 
@@ -33,7 +31,7 @@ public class NetworkBoardClickManager : MonoBehaviour
         var clickMode = build.mode;
 
         // =========================
-        // Settlement -> send nodeId
+        // Settlement
         // =========================
         if (clickMode == BuildController.BuildMode.Settlement)
         {
@@ -44,14 +42,13 @@ public class NetworkBoardClickManager : MonoBehaviour
                            .FirstOrDefault();
 
             if (node != null)
-                net.RequestPlaceSettlementServerRpc(node.id);
+                net.RequestPlaceSettlementServerRpc(node.id); // ✅ only 1 arg
 
             return;
         }
 
         // =========================
-        // Road -> send BOTH endpoint ids (A.id, B.id)
-        // (This fixes your "missing nodeBId" error)
+        // Road
         // =========================
         if (clickMode == BuildController.BuildMode.Road)
         {
@@ -61,19 +58,14 @@ public class NetworkBoardClickManager : MonoBehaviour
                            .OrderBy(e => Vector2.Distance(world, e.transform.position))
                            .FirstOrDefault();
 
-            if (edge != null && edge.A != null && edge.B != null)
-            {
-                int aId = edge.A.id;
-                int bId = edge.B.id;
-                net.RequestPlaceRoadServerRpc(aId, bId);
-            }
+            if (edge != null)
+                net.RequestPlaceRoadServerRpc(edge.id); // ✅ only 1 arg
 
             return;
         }
 
         // =========================
-        // Robber -> send tile axial coords (q,r)
-        // (This fixes your "missing r" error)
+        // Robber tile pick
         // =========================
         if (clickMode == BuildController.BuildMode.Robber)
         {
@@ -83,18 +75,19 @@ public class NetworkBoardClickManager : MonoBehaviour
                            .OrderBy(t => Vector2.Distance(world, t.transform.position))
                            .FirstOrDefault();
 
-            if (tile != null)
+            if (tile != null && build.board != null)
             {
-                // IMPORTANT:
-                // This assumes HexTile has tile.coord.q and tile.coord.r
-                // If your AxialCoord fields are named differently, adjust here.
-                net.RequestMoveRobberServerRpc(tile.coord.q, tile.coord.r);
+                int tileIndex = build.board.Tiles.IndexOf(tile);
+                if (tileIndex >= 0)
+                    net.RequestMoveRobberServerRpc(tileIndex); // ✅ only 1 arg
             }
 
             return;
         }
 
-        // City upgrade (optional, if you want networked clicking for it too)
+        // =========================
+        // City upgrade
+        // =========================
         if (clickMode == BuildController.BuildMode.City)
         {
             var hits = Physics2D.OverlapCircleAll(world, intersectionPickRadius);
@@ -104,7 +97,7 @@ public class NetworkBoardClickManager : MonoBehaviour
                            .FirstOrDefault();
 
             if (node != null)
-                net.RequestUpgradeCityServerRpc(node.id);
+                net.RequestUpgradeCityServerRpc(node.id); // ✅ only 1 arg
 
             return;
         }

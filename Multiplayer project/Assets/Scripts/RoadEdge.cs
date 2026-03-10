@@ -4,7 +4,7 @@ public class RoadEdge : MonoBehaviour
 {
     public Intersection A;
     public Intersection B;
-
+    public int id;
     public int ownerId = -1; //empty
 
     public readonly List<HexTile> adjacentTiles = new();
