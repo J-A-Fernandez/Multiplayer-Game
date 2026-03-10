@@ -2437,56 +2437,16 @@ MonoBehaviour:
     newDevRoadBuilding: 0
     newDevYearOfPlenty: 0
     newDevMonopoly: 0
-  - playerId: 0
-    playerColor: {r: 0, g: 0, b: 0, a: 1}
-    brick: 0
-    lumber: 0
-    wool: 0
-    grain: 0
-    ore: 0
-    victoryPoints: 0
-    knightsPlayed: 0
-    devKnight: 0
-    devRoadBuilding: 0
-    devYearOfPlenty: 0
-    devMonopoly: 0
-    devVictoryPoint: 0
-    newDevKnight: 0
-    newDevRoadBuilding: 0
-    newDevYearOfPlenty: 0
-    newDevMonopoly: 0
-  - playerId: 0
-    playerColor: {r: 0.9622642, g: 0, b: 0.6909662, a: 1}
-    brick: 0
-    lumber: 0
-    wool: 0
-    grain: 0
-    ore: 0
-    victoryPoints: 0
-    knightsPlayed: 0
-    devKnight: 0
-    devRoadBuilding: 0
-    devYearOfPlenty: 0
-    devMonopoly: 0
-    devVictoryPoint: 0
-    newDevKnight: 0
-    newDevRoadBuilding: 0
-    newDevYearOfPlenty: 0
-    newDevMonopoly: 0
   currentPlayerId: 0
   phase: 0
   mode: 0
   requireRollBeforeBuild: 1
   enforceBuildCosts: 1
   targetVictoryPoints: 10
-  longestRoadMinLength: 5
-  longestRoadBonusVP: 2
-  largestArmyMinKnights: 3
-  largestArmyBonusVP: 2
-  autoAssignPorts: 1
-  portCount: 9
   hasRolledThisTurn: 0
   awaitingRobberMove: 0
+  gameOver: 0
+  winnerId: -1
   yearOfPlentyChoiceA: 3
   yearOfPlentyChoiceB: 2
   monopolyChoice: 0
@@ -2865,7 +2825,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 5004936883562162399, guid: 2b95f8cdc02873b43b9d0afaebed888b, type: 3}
       propertyPath: GlobalObjectIdHash
-      value: 3322520500
+      value: 749153453
       objectReference: {fileID: 0}
     - target: {fileID: 5004936883562162399, guid: 2b95f8cdc02873b43b9d0afaebed888b, type: 3}
       propertyPath: SceneMigrationSynchronization

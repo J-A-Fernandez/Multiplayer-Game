@@ -1,15 +1,14 @@
 using System.Linq;
-using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.EventSystems;
 
 public class NetworkBoardClickManager : MonoBehaviour
 {
     [Header("Refs")]
-    public BuildController build;
-    public NetworkCatanManager net;
+    public BuildController build;           // local build controller (for current mode, radii, etc.)
+    public NetworkCatanManager net;         // sends requests to host
 
-    [Header("Pick Radius")]
+    [Header("Pick Radii")]
     public float intersectionPickRadius = 0.35f;
     public float roadPickRadius = 0.35f;
     public float tilePickRadius = 0.60f;
@@ -23,64 +22,91 @@ public class NetworkBoardClickManager : MonoBehaviour
     private void Update()
     {
         if (build == null || net == null) return;
-        if (NetworkManager.Singleton == null) return;
-        if (!NetworkManager.Singleton.IsConnectedClient) return;
-
         if (!Input.GetMouseButtonDown(0)) return;
 
+        // Block clicks through UI
         if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
             return;
 
-        var cam = Camera.main;
-        if (cam == null) return;
+        Vector2 world = Camera.main.ScreenToWorldPoint(Input.mousePosition);
 
-        Vector2 world = cam.ScreenToWorldPoint(Input.mousePosition);
+        var clickMode = build.mode;
 
-        switch (build.mode)
+        // =========================
+        // Settlement -> send nodeId
+        // =========================
+        if (clickMode == BuildController.BuildMode.Settlement)
         {
-            case BuildController.BuildMode.Settlement:
+            var hits = Physics2D.OverlapCircleAll(world, intersectionPickRadius);
+            var node = hits.Select(h => h.GetComponent<Intersection>())
+                           .Where(n => n != null)
+                           .OrderBy(n => Vector2.Distance(world, n.transform.position))
+                           .FirstOrDefault();
+
+            if (node != null)
+                net.RequestPlaceSettlementServerRpc(node.id);
+
+            return;
+        }
+
+        // =========================
+        // Road -> send BOTH endpoint ids (A.id, B.id)
+        // (This fixes your "missing nodeBId" error)
+        // =========================
+        if (clickMode == BuildController.BuildMode.Road)
+        {
+            var hits = Physics2D.OverlapCircleAll(world, roadPickRadius);
+            var edge = hits.Select(h => h.GetComponent<RoadEdge>())
+                           .Where(e => e != null)
+                           .OrderBy(e => Vector2.Distance(world, e.transform.position))
+                           .FirstOrDefault();
+
+            if (edge != null && edge.A != null && edge.B != null)
             {
-                var hits = Physics2D.OverlapCircleAll(world, intersectionPickRadius);
-                var node = hits.Select(h => h.GetComponent<Intersection>())
-                               .Where(n => n != null)
-                               .OrderBy(n => Vector2.Distance(world, n.transform.position))
-                               .FirstOrDefault();
-                if (node != null) net.RequestPlaceSettlement(node.id);
-                break;
+                int aId = edge.A.id;
+                int bId = edge.B.id;
+                net.RequestPlaceRoadServerRpc(aId, bId);
             }
 
-            case BuildController.BuildMode.City:
+            return;
+        }
+
+        // =========================
+        // Robber -> send tile axial coords (q,r)
+        // (This fixes your "missing r" error)
+        // =========================
+        if (clickMode == BuildController.BuildMode.Robber)
+        {
+            var hits = Physics2D.OverlapCircleAll(world, tilePickRadius);
+            var tile = hits.Select(h => h.GetComponent<HexTile>())
+                           .Where(t => t != null)
+                           .OrderBy(t => Vector2.Distance(world, t.transform.position))
+                           .FirstOrDefault();
+
+            if (tile != null)
             {
-                var hits = Physics2D.OverlapCircleAll(world, intersectionPickRadius);
-                var node = hits.Select(h => h.GetComponent<Intersection>())
-                               .Where(n => n != null)
-                               .OrderBy(n => Vector2.Distance(world, n.transform.position))
-                               .FirstOrDefault();
-                if (node != null) net.RequestUpgradeCity(node.id);
-                break;
+                // IMPORTANT:
+                // This assumes HexTile has tile.coord.q and tile.coord.r
+                // If your AxialCoord fields are named differently, adjust here.
+                net.RequestMoveRobberServerRpc(tile.coord.q, tile.coord.r);
             }
 
-            case BuildController.BuildMode.Road:
-            {
-                var hits = Physics2D.OverlapCircleAll(world, roadPickRadius);
-                var edge = hits.Select(h => h.GetComponent<RoadEdge>())
-                               .Where(e => e != null && e.A != null && e.B != null)
-                               .OrderBy(e => Vector2.Distance(world, e.transform.position))
-                               .FirstOrDefault();
-                if (edge != null) net.RequestPlaceRoad(edge.A.id, edge.B.id);
-                break;
-            }
+            return;
+        }
 
-            case BuildController.BuildMode.Robber:
-            {
-                var hits = Physics2D.OverlapCircleAll(world, tilePickRadius);
-                var tile = hits.Select(h => h.GetComponent<HexTile>())
-                               .Where(t => t != null)
-                               .OrderBy(t => Vector2.Distance(world, t.transform.position))
-                               .FirstOrDefault();
-                if (tile != null) net.RequestMoveRobber(tile.coord.q, tile.coord.r);
-                break;
-            }
+        // City upgrade (optional, if you want networked clicking for it too)
+        if (clickMode == BuildController.BuildMode.City)
+        {
+            var hits = Physics2D.OverlapCircleAll(world, intersectionPickRadius);
+            var node = hits.Select(h => h.GetComponent<Intersection>())
+                           .Where(n => n != null)
+                           .OrderBy(n => Vector2.Distance(world, n.transform.position))
+                           .FirstOrDefault();
+
+            if (node != null)
+                net.RequestUpgradeCityServerRpc(node.id);
+
+            return;
         }
     }
 }
