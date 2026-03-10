@@ -4,56 +4,37 @@ using UnityEngine;
 
 public class QuickNetUI : MonoBehaviour
 {
-    public string connectAddress = "127.0.0.1";
+    public string hostIp = "192.168.1.23";
     public ushort port = 7777;
 
-    private void OnGUI()
+    void OnGUI()
     {
-        var nm = NetworkManager.Singleton;
-        if (nm == null) return;
-
-        var utp = nm.GetComponent<UnityTransport>();
-
-        GUILayout.BeginArea(new Rect(10, 10, 340, 230), GUI.skin.box);
-        GUILayout.Label($"Mode: {(nm.IsHost ? "Host" : nm.IsClient ? "Client" : "Stopped")}");
-        GUILayout.Space(6);
-
-        GUILayout.Label("Client connect address:");
-        connectAddress = GUILayout.TextField(connectAddress);
+        GUILayout.BeginArea(new Rect(10, 10, 260, 200), GUI.skin.box);
+        GUILayout.Label("Host IP:");
+        hostIp = GUILayout.TextField(hostIp);
 
         GUILayout.Label("Port:");
         ushort.TryParse(GUILayout.TextField(port.ToString()), out port);
 
-        GUILayout.Space(10);
+        var nm = NetworkManager.Singleton;
+        if (nm == null) { GUILayout.Label("No NetworkManager in scene"); GUILayout.EndArea(); return; }
 
-        if (!nm.IsListening)
+        var utp = nm.GetComponent<UnityTransport>();
+        if (utp == null) { GUILayout.Label("No UnityTransport on NetworkManager"); GUILayout.EndArea(); return; }
+
+        if (GUILayout.Button("Start Host"))
         {
-            if (GUILayout.Button("Start Host (LAN)", GUILayout.Height(30)))
-            {
-                // listen on LAN (0.0.0.0) so other machines can connect
-                if (utp != null)
-                    utp.SetConnectionData("127.0.0.1", port, "0.0.0.0");
-
-                nm.StartHost();
-            }
-
-            if (GUILayout.Button("Start Client", GUILayout.Height(30)))
-            {
-                if (utp != null)
-                    utp.SetConnectionData(connectAddress, port);
-
-                nm.StartClient();
-            }
-        }
-        else
-        {
-            GUILayout.Label($"LocalClientId: {nm.LocalClientId}");
-            if (nm.IsServer) GUILayout.Label($"Connected: {nm.ConnectedClientsList.Count}");
-
-            if (GUILayout.Button("Shutdown", GUILayout.Height(30)))
-                nm.Shutdown();
+            utp.SetConnectionData("0.0.0.0", port); // listen
+            nm.StartHost();
         }
 
+        if (GUILayout.Button("Start Client"))
+        {
+            utp.SetConnectionData(hostIp, port);    // connect to host
+            nm.StartClient();
+        }
+
+        GUILayout.Label($"IsServer={nm.IsServer} IsClient={nm.IsClient} IsHost={nm.IsHost}");
         GUILayout.EndArea();
     }
 }
