@@ -154,24 +154,18 @@ public class BuildController : MonoBehaviour
 
     private void Start()
     {
-        // Multiplayer: NetworkCatanManager controls setup + ports.
-        // Singleplayer: BuildController can auto-start.
-        bool isMultiplayerSession = false;
-
     #if UNITY_NETCODE_GAMEOBJECTS
         var nm = Unity.Netcode.NetworkManager.Singleton;
-        isMultiplayerSession = (nm != null && nm.IsListening);
+        bool isMultiplayer = (nm != null && nm.IsListening);
+        if (isMultiplayer) return; // NetworkCatanManager controls setup in multiplayer
     #endif
 
-    if (autoStartSingleplayerOnly && isMultiplayerSession)
-        return;
+        BeginSetup();
+        BuildDevDeck();
 
-    BeginSetup();
-    BuildDevDeck();
-
-    if (autoAssignPorts)
-        StartCoroutine(WaitForBoardThenAssignPorts());
-}
+        if (autoAssignPorts)
+            StartCoroutine(WaitForBoardThenAssignPorts());
+    }
 
     // =========================
     // (OPTIONAL) NETWORK HELPERS
