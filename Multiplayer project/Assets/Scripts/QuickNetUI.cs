@@ -12,18 +12,23 @@ public class QuickNetUI : MonoBehaviour
         var nm = NetworkManager.Singleton;
         if (nm == null) return;
 
-        GUILayout.BeginArea(new Rect(10, 10, 260, 200), GUI.skin.box);
+        float w = 260f;
+        float h = 210f;
+        float x = Screen.width - w - 10f;
+        float y = 10f;
+
+        GUILayout.BeginArea(new Rect(x, y, w, h), GUI.skin.box);
 
         GUILayout.Label($"Host: {nm.IsHost}  Server: {nm.IsServer}  Client: {nm.IsClient}");
 
         GUILayout.BeginHorizontal();
         GUILayout.Label("IP:", GUILayout.Width(30));
-        address = GUILayout.TextField(address, GUILayout.Width(150));
+        address = GUILayout.TextField(address, GUILayout.Width(160));
         GUILayout.EndHorizontal();
 
         GUILayout.BeginHorizontal();
         GUILayout.Label("Port:", GUILayout.Width(30));
-        ushort.TryParse(GUILayout.TextField(port.ToString(), GUILayout.Width(150)), out port);
+        ushort.TryParse(GUILayout.TextField(port.ToString(), GUILayout.Width(160)), out port);
         GUILayout.EndHorizontal();
 
         var utp = nm.GetComponent<UnityTransport>();
