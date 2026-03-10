@@ -422,7 +422,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 836f8f682f551ad4ca276ed4d00da3b6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::QuickNetUI
-  hostIp: 192.168.1.23
+  address: 127.0.0.1
   port: 7777
 --- !u!4 &182299721
 Transform:
@@ -911,6 +911,81 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &712194192
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 712194194}
+  - component: {fileID: 712194193}
+  - component: {fileID: 712194195}
+  m_Layer: 0
+  m_Name: NetGame
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &712194193
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 712194192}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
+  GlobalObjectIdHash: 1064891091
+  InScenePlacedSourceGlobalObjectIdHash: 0
+  DeferredDespawnTick: 0
+  Ownership: 1
+  AlwaysReplicateAsRoot: 0
+  SynchronizeTransform: 1
+  ActiveSceneSynchronization: 0
+  SceneMigrationSynchronization: 0
+  SpawnWithObservers: 1
+  DontDestroyWithOwner: 0
+  AutoObjectParentSync: 1
+  SyncOwnerTransformWhenParented: 1
+  AllowOwnerToParent: 0
+--- !u!4 &712194194
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 712194192}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 842.05817, y: 537.6328, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &712194195
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 712194192}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2c2e59e0923c649449d262fa163fd1e2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NetworkCatanManager
+  ShowTopMostFoldoutHeaderGroup: 1
+  board: {fileID: 520611209}
+  build: {fileID: 1770651384}
+  mapSeed:
+    m_InternalValue: 0
 --- !u!1 &750145630
 GameObject:
   m_ObjectHideFlags: 0
@@ -2506,10 +2581,11 @@ MonoBehaviour:
   m_GameObject: {fileID: 1770651382}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: a8fbb950a1cc9ac45875bce62f99b55f, type: 3}
+  m_Script: {fileID: 11500000, guid: 53a13e4d5f8b62746941ac10440e5b0b, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::BoardClickManager
-  build: {fileID: 1770651384}
+  m_EditorClassIdentifier: Assembly-CSharp::NetworkBoardClickManager
+  build: {fileID: 0}
+  net: {fileID: 0}
   intersectionPickRadius: 0.35
   roadPickRadius: 0.35
   tilePickRadius: 0.6
@@ -2650,6 +2726,55 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1772316296}
   m_CullTransparentMesh: 1
+--- !u!1 &1774652988
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1774652990}
+  - component: {fileID: 1774652989}
+  m_Layer: 0
+  m_Name: ClickManger
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1774652989
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1774652988}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53a13e4d5f8b62746941ac10440e5b0b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NetworkBoardClickManager
+  build: {fileID: 1770651384}
+  net: {fileID: 712194195}
+  intersectionPickRadius: 0.35
+  roadPickRadius: 0.35
+  tilePickRadius: 0.6
+--- !u!4 &1774652990
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1774652988}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 842.05817, y: 537.6328, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1814964807
 GameObject:
   m_ObjectHideFlags: 0
@@ -2907,7 +3032,7 @@ PrefabInstance:
     - target: {fileID: 5342359357698183600, guid: 2b95f8cdc02873b43b9d0afaebed888b, type: 3}
       propertyPath: build
       value: 
-      objectReference: {fileID: 0}
+      objectReference: {fileID: 1770651384}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -3220,3 +3345,5 @@ SceneRoots:
   - {fileID: 3753823053885610781}
   - {fileID: 1139867953541210408}
   - {fileID: 182299721}
+  - {fileID: 712194194}
+  - {fileID: 1774652990}

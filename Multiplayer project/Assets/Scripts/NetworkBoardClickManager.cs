@@ -1,4 +1,5 @@
 using System.Linq;
+using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.EventSystems;
 
@@ -20,6 +21,15 @@ public class NetworkBoardClickManager : MonoBehaviour
     private void Update()
     {
         if (build == null || net == null) return;
+
+        // ✅ CLIENT-SIDE TURN LOCK: don't even send requests if it's not your turn
+        var nm = NetworkManager.Singleton;
+        if (nm != null)
+        {
+            int localPid = (int)nm.LocalClientId; // host=0, first client=1...
+            if (localPid != build.currentPlayerId) return;
+        }
+
         if (!Input.GetMouseButtonDown(0)) return;
 
         if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
@@ -36,9 +46,7 @@ public class NetworkBoardClickManager : MonoBehaviour
                            .OrderBy(n => Vector2.Distance(world, n.transform.position))
                            .FirstOrDefault();
 
-            if (node != null)
-                net.RequestPlaceSettlementServerRpc(node.id);
-
+            if (node != null) net.RequestPlaceSettlementServerRpc(node.id);
             return;
         }
 
@@ -50,9 +58,7 @@ public class NetworkBoardClickManager : MonoBehaviour
                            .OrderBy(e => Vector2.Distance(world, e.transform.position))
                            .FirstOrDefault();
 
-            if (edge != null)
-                net.RequestPlaceRoadServerRpc(edge.id);
-
+            if (edge != null) net.RequestPlaceRoadServerRpc(edge.id);
             return;
         }
 
@@ -66,9 +72,8 @@ public class NetworkBoardClickManager : MonoBehaviour
 
             if (tile != null && build.board != null)
             {
-                int idx = build.board.Tiles.IndexOf(tile);
-                if (idx >= 0)
-                    net.RequestMoveRobberServerRpc(idx);
+                int tileIndex = build.board.Tiles.IndexOf(tile);
+                if (tileIndex >= 0) net.RequestMoveRobberServerRpc(tileIndex);
             }
             return;
         }
@@ -81,9 +86,7 @@ public class NetworkBoardClickManager : MonoBehaviour
                            .OrderBy(n => Vector2.Distance(world, n.transform.position))
                            .FirstOrDefault();
 
-            if (node != null)
-                net.RequestUpgradeCityServerRpc(node.id);
-
+            if (node != null) net.RequestUpgradeCityServerRpc(node.id);
             return;
         }
     }
