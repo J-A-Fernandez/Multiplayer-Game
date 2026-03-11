@@ -6,17 +6,7 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
-    path: Assets/Scenes/America_Map.unity
-    guid: 8c9cfa26abfee488c85f1582747f6a02
-<<<<<<< HEAD
-=======
-  - enabled: 1
     path: Assets/Scenes/Catan_Multiplayer.unity
-    guid: 8c28f8437e9c4a0449ced4c7053308f4
->>>>>>> parent of db172c9 (Update EditorBuildSettings.asset)
-  - enabled: 1
-    path: Assets/Scenes/Catan_Multiplayer.unity
-    guid: d6af8f01eabf24c60b453eef67e7bbc2
-  m_configObjects:
-    com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 2bcd2660ca9b64942af0de543d8d7100, type: 3}
+    guid: 7fbe5e323a126493db57b6055b73ad49
+  m_configObjects: {}
   m_UseUCBPForAssetBundles: 0
